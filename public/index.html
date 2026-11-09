@@ -55,7 +55,21 @@ button,input,select{font:inherit;color:inherit}
 body.wish .wishbtn{border-color:var(--gold)}
 .gift{flex:none;image-rendering:pixelated;vertical-align:middle}
 .wish-name{background:none;border:0;text-align:left;cursor:pointer;padding:0;text-shadow:inherit;font-size:20px}
-#fchart{width:100%;height:auto;display:block;margin:6px 0}
+.fbars{position:relative;display:flex;gap:2px;height:84px;padding:0 0 16px;margin:6px 0 2px;background:linear-gradient(transparent calc(var(--zero) - .5px),rgba(168,176,224,.6) calc(var(--zero) - .5px),rgba(168,176,224,.6) calc(var(--zero) + .5px),transparent calc(var(--zero) + .5px)) 0 0/100% calc(100% - 16px) no-repeat;background-color:rgba(6,6,26,.45);border-radius:4px}
+.fbar{position:relative;flex:1;min-width:0;height:100%;background:none;border:0;padding:0;cursor:pointer}
+.fbar i{position:absolute;left:18%;right:18%;background:#7fd8b0;border-radius:4px 4px 0 0}
+.fbar.neg i{background:#ff6b70;border-radius:0 0 4px 4px}
+.fbar:hover i,.fbar.on i{filter:brightness(1.25);box-shadow:0 0 0 2px rgba(255,255,255,.35)}
+.fbar em,.fkey em{position:absolute;left:50%;width:7px;height:7px;margin-left:-3.5px;margin-bottom:3px;border-radius:50%;background:#ffd166}
+.fbar span{position:absolute;left:0;right:0;bottom:-15px;text-align:center;font-size:14px;color:var(--dim)}
+.fbar.on span{color:#fff}
+.fkey{white-space:nowrap}.fkey em{position:relative;display:inline-block;left:0;margin:0 2px 0 6px}
+.fstats{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin:6px 0}
+.fstats div{background:rgba(0,0,20,.3);border-radius:4px;padding:4px 6px;display:flex;flex-direction:column;min-width:0}
+.fstats small{font-size:15px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fstats b{font-family:var(--px);font-size:9px;font-weight:normal;margin-top:3px;white-space:nowrap}
+.ftip{font-size:17px;margin:0 0 6px;min-height:1.1em;color:var(--dim)}.ftip b{color:#fff;font-weight:normal}
+.fdetail summary{cursor:pointer;color:var(--gold);margin:6px 0}
 .kv.fc{grid-template-columns:1fr auto;font-size:18px}
 .cfgbtn svg{transition:transform .3s;image-rendering:pixelated}
 body.cfg .cfgbtn{border-color:var(--gold)}
@@ -1817,33 +1831,34 @@ function wishForm(w) {
     <input name="note" class="full" placeholder="Note ou lien (facultatif)" maxlength="120" value="${w ? esc(w.note || '') : ''}">
     <div class="row"><button class="ffbtn grow">${w ? 'Enregistrer' : 'Ajouter à la wishlist'}</button>${w ? '<button type="button" class="ffbtn" data-act="closeModal">Annuler</button>' : ''}</div></form>`;
 }
-function forecastPanel(g) {
-  const f = forecast(g), inc = expectedIncome(), low = f.reduce((a, r) => r.bal < a.bal ? r : a, f[0]), end = f[f.length - 1];
-  return `<div class="gold">PRÉVISIONS SUR 12 MOIS</div>
-    <form data-form="income-plan"><label class="dim">Revenu mensuel prévu</label><div class="row"><input name="amount" class="amount" inputmode="numeric" value="${S.expectedIncome == null ? '' : num(S.expectedIncome)}" placeholder="${num(inc)}"><span class="gold">F</span><button class="ffbtn sm">OK</button></div></form>
-    ${S.expectedIncome == null ? `<p class="dim">${inc ? `Estimé d'après tes rentrées des trois derniers mois : ${fmt(inc)}.` : 'Aucune rentrée récente : indique ton revenu mensuel pour des prévisions justes.'}</p>` : ''}
-    ${g.cash == null ? '<p class="red">Ta trésorerie de départ n\'est pas définie : la courbe part de 0. Menu Trésorerie pour la définir.</p>' : ''}
-    <canvas id="fchart" width="360" height="150"></canvas>
-    <p>${low.bal < 0 ? `<span class="red">Ta trésorerie passerait à ${fmt(low.bal)} en ${esc(ymLabel(low.ym))}.</span> Repousse une envie, ajuste un budget ou prévois une rentrée.` : `Ta trésorerie reste positive : au plus bas ${fmt(low.bal)} (${esc(ymLabel(low.ym))}), ${fmt(end.bal)} dans un an.`}</p>
-    <div class="kv fc">${f.map(r => `<span>${esc(ymLabel(r.ym))}${r.wishes.length ? ` ${WISH_ICON}` : ''}</span><b class="${r.bal < 0 ? 'red' : ''}">${fmt(r.bal)}</b>`).join('')}</div>
-    <p class="dim">Chaque mois : + revenu prévu − budgets du mois. Une envie plus chère que son budget pèse en plus. Le mois en cours ne compte que ce qui reste à dépenser.</p>`;
+// Les prévisions : trois chiffres, une petite courbe, et le détail mois par mois si on le veut
+const monthShort = ym => { const n = ymLabel(ym).split(' ')[0]; return (n.length > 4 ? n.slice(0, 4) + '.' : n) + ' ' + ym.slice(2, 4); };
+function forecastPanel(g) { // les prévisions : trois chiffres et une barre par mois (la trésorerie prévue en fin de mois)
+  const f = forecast(g), inc = expectedIncome(), start = g.netCash == null ? 0 : g.netCash, low = f.reduce((a, r) => r.bal < a.bal ? r : a, f[0]), end = f[f.length - 1];
+  const lo = Math.min(0, ...f.map(r => r.bal)), hi = Math.max(1, ...f.map(r => r.bal)), span = hi - lo, zero = hi / span * 100;
+  const ini = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
+  const bars = f.map((r, k) => { const h = Math.max(1.5, Math.abs(r.bal) / span * 100), neg = r.bal < 0;
+    return `<button class="fbar ${neg ? 'neg' : ''}" data-k="${k}" aria-label="${esc(ymLabel(r.ym))} : ${fmt(r.bal)}"><i style="${neg ? `top:${zero}%` : `bottom:${100 - zero}%`};height:${h.toFixed(1)}%"></i>${r.wishes.length ? `<em style="${neg ? `top:${zero}%;margin-top:-10px` : `bottom:${(100 - zero + h).toFixed(1)}%`}"></em>` : ''}<span>${ini[+r.ym.slice(5) - 1]}</span></button>`; }).join('');
+  const tile = (label, v, cls = '', sub = '') => `<div><small>${label}</small><b class="${cls}">${fmt(v)}</b>${sub ? `<small>${sub}</small>` : ''}</div>`;
+  return `<div class="gold">PRÉVISIONS · 12 MOIS</div>
+    <p class="dim">Ta trésorerie à la fin de chaque mois, si tu dépenses tous tes budgets et reçois ${fmt(inc)} par mois.</p>
+    <div class="fstats">${tile('Aujourd\'hui', start)}${tile('Au plus bas', low.bal, low.bal < 0 ? 'red' : '', monthShort(low.ym))}${tile('Dans 12 mois', end.bal, end.bal < 0 ? 'red' : '')}</div>
+    <div class="fbars" style="--zero:${zero.toFixed(1)}%">${bars}</div>
+    <p class="ftip" id="ftip">Touche une barre pour voir le mois. <span class="fkey"><em></em> une envie tombe ce mois-là</span></p>
+    ${low.bal < 0 ? `<p class="red">Tu passerais sous zéro en ${esc(ymLabel(low.ym))}. Repousse une envie, ajuste un budget ou prévois une rentrée.</p>` : ''}
+    ${g.netCash == null ? '<p class="red">Ta trésorerie de départ n\'est pas définie : les barres partent de 0.</p>' : ''}
+    <form data-form="income-plan"><label class="dim">Revenu mensuel prévu${S.expectedIncome == null && inc ? ' (moyenne de tes rentrées récentes)' : ''}</label><div class="row"><input name="amount" class="amount" inputmode="numeric" value="${S.expectedIncome == null ? '' : num(S.expectedIncome)}" placeholder="${num(inc)}"><span class="gold">F</span><button class="ffbtn sm">OK</button></div></form>
+    <details class="fdetail"><summary>Mois par mois</summary><div class="kv fc">${f.map(r => `<span>${esc(ymLabel(r.ym))}${r.wishes.length ? ` · ${r.wishes.map(w => esc(w.name)).join(', ')}` : ''}</span><b class="${r.bal < 0 ? 'red' : ''}">${fmt(r.bal)}</b>`).join('')}</div><p class="dim">Chaque mois : + revenu prévu − budgets du mois (une envie plus chère que son budget pèse en plus). Départ : la trésorerie nette.</p></details>`;
 }
-function drawForecast() {
-  const cv = $('#fchart'); if (!cv) return; const g = cv.getContext('2d'), f = forecast(UI.game), start = UI.game.netCash == null ? 0 : UI.game.netCash;
-  const pts = [start, ...f.map(r => r.bal)], W = cv.width, H = cv.height, L = 6, Rr = 6, T = 14, B = 22;
-  const lo = Math.min(0, ...pts), hi = Math.max(1, ...pts), y = v => T + (hi - v) / (hi - lo || 1) * (H - T - B), x = i => L + i * (W - L - Rr) / (pts.length - 1);
-  g.fillStyle = '#0b0910'; g.fillRect(0, 0, W, H);
-  g.fillStyle = '#1a2470'; for (let i = 0; i < pts.length; i++) g.fillRect(Math.round(x(i)), T, 1, H - T - B);
-  if (lo < 0) { g.fillStyle = 'rgba(229,72,77,.18)'; g.fillRect(0, y(0), W, H - B - y(0)); }
-  g.fillStyle = '#a8b0e0'; for (let xx = 0; xx < W; xx += 4) g.fillRect(xx, Math.round(y(0)), 2, 1);
-  g.strokeStyle = '#9ff0a0'; g.lineWidth = 2; g.beginPath(); pts.forEach((v, i) => i ? g.lineTo(x(i), y(v)) : g.moveTo(x(i), y(v))); g.stroke();
-  pts.forEach((v, i) => { g.fillStyle = v < 0 ? '#ff6b70' : '#ffd166'; g.fillRect(Math.round(x(i)) - 2, Math.round(y(v)) - 2, 4, 4); });
-  f.forEach((r, i) => { if (!r.wishes.length) return; const gx = Math.round(x(i + 1)) - 4, gy = Math.round(y(r.bal)) - 14; g.fillStyle = '#e5484d'; g.fillRect(gx + 1, gy + 3, 6, 5); g.fillStyle = '#ff6b70'; g.fillRect(gx, gy + 2, 8, 2); g.fillStyle = '#ffd166'; g.fillRect(gx + 3, gy + 2, 2, 6); g.fillRect(gx + 2, gy, 1, 2); g.fillRect(gx + 5, gy, 1, 2); });
-  g.font = "16px 'VT323'"; g.fillStyle = '#a8b0e0'; g.textAlign = 'center';
-  const ini = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D']; g.fillText('auj.', x(0) + 10, H - 6);
-  f.forEach((r, i) => g.fillText(ini[+r.ym.slice(5) - 1], x(i + 1), H - 6));
-  g.textAlign = 'left'; g.fillStyle = '#ffd166'; g.fillText(kfmt(hi), 8, 12); if (lo < 0) { g.fillStyle = '#ff6b70'; g.fillText(kfmt(lo), 8, H - B - 2); }
+// Toucher ou survoler une barre : le mois, la trésorerie prévue et les envies s'affichent dessous
+function forecastPoint(e) {
+  const b = e.target.closest && e.target.closest('.fbar'); if (!b || UI.place !== 'belvedere' || UI.sub !== 'forecast') return;
+  const r = forecast(UI.game)[+b.dataset.k]; if (!r) return;
+  document.querySelectorAll('.fbar.on').forEach(x => x.classList.remove('on')); b.classList.add('on');
+  $('#ftip').innerHTML = `<b>Fin ${esc(ymLabel(r.ym))}</b> · <span class="${r.bal < 0 ? 'red' : 'gold'}">${fmt(r.bal)}</span><br><small>+ ${fmt(r.income)} revenu · − ${fmt(r.out)} budgets${r.wishes.length ? ` · ${r.wishes.map(w => esc(w.name)).join(', ')}` : ''}</small>`;
 }
+document.addEventListener('pointerover', forecastPoint);
+document.addEventListener('pointerdown', forecastPoint);
 function idlePanel(g) {
   const ms = g.ms, td = ms.daily[ms.elapsed] || 0, alert = ms.cats.some(c => c.budget > 0 && c.spent > c.budget) || td > ms.todayAllowance, worst = [...ms.cats].sort((a, b) => b.ratio - a.ratio).slice(0, (matchMedia('(max-width:640px)').matches ? 4 : 3) - (alert || !S.expenses.length ? 1 : 0));
   return `<div class="row between wrap"><span class="gold">BUDGET DU JOUR</span><b class="big">${fmt(Math.max(0, ms.todayAllowance - td))}</b></div>
@@ -1997,7 +2012,6 @@ function renderUI() {
   document.body.classList.toggle('open', !!UI.place); document.body.classList.toggle('cfg', UI.place === 'home'); document.body.classList.toggle('wish', UI.place === 'belvedere');
   if (UI.place === 'bank' && UI.sub === 'daily') drawDaily();
   if (UI.place === 'lab') drawSparks();
-  if (UI.place === 'belvedere' && UI.sub === 'forecast') drawForecast();
   ensureLayers(g);
   return g;
 }

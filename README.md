@@ -147,7 +147,7 @@ Le bouton **🎁**, à côté de ⚙ en haut à droite, ouvre le Belvédère : l
 - Si elle coûte plus que le budget de sa catégorie, la ligne le signale ; **Ajuster** monte le budget de ce seul mois, juste assez (les autres mois ne changent pas).
 - **Acheté** : l'envie devient une vraie dépense (au prix réellement payé) et sa réservation disparaît. Écarts › Catégories montre les montants réservés.
 
-**Prévisions** : une courbe de la trésorerie sur 12 mois, avec un cadeau sur les mois où tombe une envie.
+**Prévisions** : trois chiffres (aujourd'hui, au plus bas, dans 12 mois) et **une barre par mois** : la trésorerie prévue à la fin du mois, verte au-dessus de zéro, rouge en dessous, avec un point doré quand une envie tombe ce mois-là. Toucher une barre affiche le mois, la trésorerie, le revenu et les budgets comptés. Le détail mois par mois reste disponible en dessous.
 - Chaque mois : + le revenu mensuel prévu − les budgets du mois. Une envie plus chère que son budget pèse en plus. Le mois en cours ne compte que ce qui reste à dépenser.
 - Le revenu prévu se règle sur l'écran ; sans réglage, c'est la moyenne des rentrées des trois derniers mois.
 - Si la courbe passe sous zéro, l'écran dit quand et de combien : de quoi repousser une envie, ajuster un budget ou prévoir une rentrée.
