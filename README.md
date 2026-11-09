@@ -162,9 +162,12 @@ Marché › **Rembours.** garde la trace de l'argent avancé ou dû, **sans touc
 | **On a payé à ma place** (je dois) | Rien ne bouge | La trésorerie baisse |
 | **On m'a prêté de l'argent** (je dois) | La trésorerie monte | La trésorerie baisse |
 
-- Chaque ligne note qui, combien, pour quoi et quand. Les totaux « On te doit » et « Tu dois » sont en haut de l'écran.
+- Chaque ligne note qui, combien, pour quoi et quand. En haut de l'écran : « On te doit » (+), « Tu dois » (−) et leur **solde**, négatif quand tu dois plus qu'on ne te doit.
 - Le bouton ✓ accepte un remboursement partiel : la ligne reste en attente jusqu'à ce que tout soit rendu.
-- Trésorerie détaille l'effet des remboursements et ce qui reste dû dans un sens comme dans l'autre.
+- L'écran Trésorerie distingue :
+  - **Disponible** : l'argent réellement en main (prêts reçus et remboursements reçus en plus, avances faites et remboursements versés en moins) ;
+  - **Remboursements en attente** : on te doit − tu dois ;
+  - **Trésorerie nette** : le disponible une fois tous les remboursements réglés. Les prévisions partent de la trésorerie nette.
 ## L'XP : chaque jour compte
 
 | Ce qui rapporte, chaque jour | XP |

@@ -959,7 +959,7 @@ function expectedIncome() {
 }
 // La trésorerie mois par mois sur un an : + revenu prévu, − budgets (ou les envies, si elles dépassent leur budget)
 function forecast(g) {
-  const ym0 = ymOf(today()), inc = expectedIncome(), rows = []; let bal = g.cash == null ? 0 : g.cash;
+  const ym0 = ymOf(today()), inc = expectedIncome(), rows = []; let bal = g.netCash == null ? 0 : g.netCash;
   for (let k = 0; k < 12; k++) {
     const ym = addMonths(ym0, k), ms = monthStats(ym); let out = 0;
     for (const c of ms.cats) out += k === 0 ? Math.max(c.budget - c.spent, c.reserved, 0) : Math.max(c.budget, c.reserved);
@@ -1112,19 +1112,22 @@ function computeGame() {
   const sd = S.startDate || S.createdAt || t;
   const inc = S.incomes.filter(e => e.date >= sd).reduce((a, e) => a + e.amount, 0), out = S.expenses.filter(e => e.date >= sd).reduce((a, e) => a + e.amount, 0);
   // les remboursements passent par la trésorerie, jamais par les dépenses : le budget du jour n'en sait rien
-  let refundNet = 0, owedOpen = 0, oweOpen = 0;
+  // 1) l'argent réellement passé de main en main : prêts reçus, avances faites, remboursements reçus ou versés
+  // 2) ce qui reste dû : on te doit (+) et tu dois (−) ; la trésorerie nette en tient compte
+  let loansIn = 0, advancesOut = 0, repaidIn = 0, repaidOut = 0, owedOpen = 0, oweOpen = 0;
   for (const r of S.refunds) {
-    const paid = r.pays.reduce((a, x) => a + x.amount, 0), rest = Math.max(0, r.amount - paid), sign = r.dir === 'owed' ? 1 : -1;
-    if (r.date >= sd && (r.dir === 'owed' || r.how === 'cash')) refundNet -= sign * r.amount; // l'avance sort ; le prêt reçu entre
-    for (const x of r.pays) if (x.date >= sd) refundNet += sign * x.amount;                   // le remboursement revient ; ou repart
-    if (r.dir === 'owed') owedOpen += rest; else oweOpen += rest;
+    const paid = r.pays.reduce((a, x) => a + x.amount, 0), rest = Math.max(0, r.amount - paid), owed = r.dir === 'owed';
+    if (r.date >= sd) { if (owed) advancesOut += r.amount; else if (r.how === 'cash') loansIn += r.amount; }
+    for (const x of r.pays) if (x.date >= sd) { if (owed) repaidIn += x.amount; else repaidOut += x.amount; }
+    if (owed) owedOpen += rest; else oweOpen += rest;
   }
-  const cash = S.startCash == null ? null : S.startCash + inc - out + refundNet;
+  const refundNet = loansIn - advancesOut + repaidIn - repaidOut, pendingNet = owedOpen - oweOpen;
+  const cash = S.startCash == null ? null : S.startCash + inc - out + refundNet, netCash = cash == null ? null : cash + pendingNet;
   const o = byDate.get(t), todaySum = o ? o.sum : 0, checkedToday = byDate.has(t) || !!S.checkins[t];
   const buildToday = checkedToday && todaySum <= ms.todayAllowance;
   const g = {xp, level, xpIn: xp - base, xpNext: xpNeed(level), streak, best, victories, zeroDays, checkDays, nExp: S.expenses.length,
     nChests, buildDays, buildToday, builtNow: buildDays, built: buildDays, combo: comboOf(streak), bestCombo, xpToday, todayParts,
-    nHabit, nTrack, hp, treasure: savings, savings, cash, inc, out, refundNet, owedOpen, oweOpen, underMonths, perfectMonths, ms, checkedToday};
+    nHabit, nTrack, hp, treasure: savings, savings, cash, netCash, inc, out, refundNet, loansIn, advancesOut, repaidIn, repaidOut, pendingNet, owedOpen, oweOpen, underMonths, perfectMonths, ms, checkedToday};
   g.unlocked = ACH.filter(a => a.test(g)).map(a => a.id);
   return g;
 }
@@ -1826,7 +1829,7 @@ function forecastPanel(g) {
     <p class="dim">Chaque mois : + revenu prévu − budgets du mois. Une envie plus chère que son budget pèse en plus. Le mois en cours ne compte que ce qui reste à dépenser.</p>`;
 }
 function drawForecast() {
-  const cv = $('#fchart'); if (!cv) return; const g = cv.getContext('2d'), f = forecast(UI.game), start = UI.game.cash == null ? 0 : UI.game.cash;
+  const cv = $('#fchart'); if (!cv) return; const g = cv.getContext('2d'), f = forecast(UI.game), start = UI.game.netCash == null ? 0 : UI.game.netCash;
   const pts = [start, ...f.map(r => r.bal)], W = cv.width, H = cv.height, L = 6, Rr = 6, T = 14, B = 22;
   const lo = Math.min(0, ...pts), hi = Math.max(1, ...pts), y = v => T + (hi - v) / (hi - lo || 1) * (H - T - B), x = i => L + i * (W - L - Rr) / (pts.length - 1);
   g.fillStyle = '#0b0910'; g.fillRect(0, 0, W, H);
@@ -1923,7 +1926,7 @@ function refundRow(r) {
 }
 function refundPanel(g) { // les remboursements : hors budget, ils ne passent que par la trésorerie
   const open = S.refunds.filter(r => refundRest(r) > 0).sort((a, b) => a.date.localeCompare(b.date)), done = S.refunds.filter(r => refundRest(r) === 0).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
-  return `<div class="kv"><span>On te doit</span><b class="green">${fmt(g.owedOpen)}</b><span>Tu dois</span><b class="${g.oweOpen ? 'red' : ''}">${fmt(g.oweOpen)}</b></div>
+  return `<div class="kv"><span>On te doit</span><b class="green">+${fmt(g.owedOpen)}</b><span>Tu dois</span><b class="${g.oweOpen ? 'red' : ''}">−${fmt(g.oweOpen)}</b><span class="gold">Solde</span><b class="${g.pendingNet < 0 ? 'red' : g.pendingNet > 0 ? 'green' : ''}">${fmtS(g.pendingNet)}</b></div>${g.pendingNet ? `<p class="dim">${g.pendingNet < 0 ? 'Tu dois plus qu\'on ne te doit.' : 'On te doit plus que tu ne dois.'}</p>` : ''}
     <p class="dim">Hors budget : seule la trésorerie bouge.</p>
     <form data-form="refund" autocomplete="off"><div class="choices">
       <label><input type="radio" name="kind" value="owed" checked><span>J'ai avancé de l'argent <small class="dim">(on me doit)</small></span></label>
@@ -1946,9 +1949,10 @@ function cashPanel(g) { // la trésorerie : le solde du jour, et d'où il vient
   const sdShort = `${sd.slice(8, 10)}/${sd.slice(5, 7)}`;
   const head = `<div class="row between wrap"><span class="gold">TRÉSORERIE</span><b class="big ${g.cash != null && g.cash < 0 ? 'red' : ''}">${g.cash == null ? '—' : fmt(g.cash)}</b></div>`;
   const calc = g.cash == null ? '<p class="dim">Indique combien tu as aujourd\'hui : la trésorerie suivra ensuite tes dépenses, tes rentrées et tes remboursements.</p>'
-    : `<div class="kv"><span>Départ (${sdShort})</span><b>${fmt(S.startCash)}</b><span>+ Rentrées</span><b class="green">${fmt(g.inc)}</b><span>− Dépenses</span><b class="red">${fmt(g.out)}</b>${g.refundNet ? `<span>${g.refundNet > 0 ? '+' : '−'} Remboursements</span><b class="${g.refundNet > 0 ? 'green' : 'red'}">${fmt(Math.abs(g.refundNet))}</b>` : ''}<span class="gold">= Aujourd'hui</span><b class="gold">${fmt(g.cash)}</b></div>
+    : `<div class="kv"><span>Départ (${sdShort})</span><b>${fmt(S.startCash)}</b><span>+ Rentrées</span><b class="green">${fmt(g.inc)}</b><span>− Dépenses</span><b class="red">${fmt(g.out)}</b>${g.loansIn ? `<span>+ Prêts reçus</span><b class="green">${fmt(g.loansIn)}</b>` : ''}${g.advancesOut ? `<span>− Avances faites</span><b class="red">${fmt(g.advancesOut)}</b>` : ''}${g.repaidIn ? `<span>+ Remboursements reçus</span><b class="green">${fmt(g.repaidIn)}</b>` : ''}${g.repaidOut ? `<span>− Remboursements versés</span><b class="red">${fmt(g.repaidOut)}</b>` : ''}<span class="gold">= Disponible</span><b class="gold">${fmt(g.cash)}</b></div>
+      ${g.pendingNet || g.owedOpen || g.oweOpen ? `<div class="kv">${g.owedOpen ? `<span>+ On te doit encore</span><b class="green">${fmt(g.owedOpen)}</b>` : ''}${g.oweOpen ? `<span>− Tu dois encore</span><b class="red">${fmt(g.oweOpen)}</b>` : ''}<span>Remboursements en attente</span><b class="${g.pendingNet < 0 ? 'red' : 'green'}">${fmtS(g.pendingNet)}</b><span class="gold">= Trésorerie nette</span><b class="gold ${g.netCash < 0 ? 'red' : ''}">${fmt(g.netCash)}</b></div><p class="dim">La trésorerie nette, c'est ce qui te restera une fois tous les remboursements réglés.</p>` : ''}
       ${beforeSum ? `<p class="dim">${before.length > 1 ? `${before.length} dépenses de ce mois (${fmt(beforeSum)}) datent d'avant le départ : elles ne sont pas déduites` : `1 dépense de ce mois (${fmt(beforeSum)}) date d'avant le départ : elle n'est pas déduite`}. Recule la date de départ au 1er du mois si elle${before.length > 1 ? 's doivent' : ' doit'} compter.</p>` : ''}
-      <div class="kv">${g.owedOpen ? `<span>On te doit encore</span><b class="green">${fmt(g.owedOpen)}</b>` : ''}${g.oweOpen ? `<span>Tu dois encore</span><b class="red">${fmt(g.oweOpen)}</b>` : ''}<span>Fin du mois, budget épuisé</span><b>${fmt(g.cash - Math.max(0, ms.remaining))}</b></div>`;
+      <div class="kv"><span>Fin du mois, budget épuisé${g.pendingNet ? ' (net)' : ''}</span><b>${fmt(g.netCash - Math.max(0, ms.remaining))}</b></div>`;
   return head + calc + `<div class="gold">DÉPART</div><form data-form="cash" class="col"><div class="row"><input name="amount" class="amount" inputmode="numeric" value="${S.startCash == null ? '' : num(S.startCash)}" placeholder="0" aria-label="Trésorerie de départ"><span class="gold">F</span></div>
     <div class="row"><span class="dim">au</span><input type="date" name="date" class="grow" value="${esc(sd)}"><button class="ffbtn">Valider</button></div></form>
     <div class="gold">RENTRÉES</div>${inc.length ? `<div class="list">${inc.map(e => `<div class="li"><span class="grow">${esc(e.note || 'Rentrée')}<br><small class="dim">${dayLabel(e.date)}${e.date < sd ? ' · avant le départ, non comptée' : ''}</small></span><span class="green">+${fmt(e.amount)}</span><button class="x" data-act="delIncome" data-id="${e.id}" aria-label="Supprimer">×</button></div>`).join('')}</div>` : '<p class="dim">Aucune. Marché › Rentrée pour en ajouter.</p>'}`;
