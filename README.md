@@ -12,10 +12,17 @@ Le jeu tient dans un seul fichier, `public/index.html`. Il est mis en ligne par 
 | Fichier | Rôle |
 |---|---|
 | `public/index.html` | Le jeu |
-| `src/worker.js` | La porte d'entrée : vérifie le code, ouvre la session, note les entrées, puis sert le jeu |
-| `wrangler.jsonc` | La configuration du Worker (nom, fichiers statiques, journaux) |
+| `src/worker.js` | La porte d'entrée (vérifie le code, ouvre la session, note les entrées, sert le jeu) et le coffre en ligne de chaque joueur (`/api/coffre`) |
+| `wrangler.jsonc` | La configuration du Worker (nom, fichiers statiques, coffre des joueurs, journaux) |
 
-Les données restent dans le navigateur de chaque appareil (`localStorage`). Pour les sauvegarder ou les passer d'un appareil à l'autre, utilise **Config → Sauvegarde → Exporter (JSON) / Importer**.
+### Où sont gardées les données
+
+- **Sur l'appareil**, en cache (`localStorage`) : le jeu marche même si la connexion tombe.
+- **En ligne, dans un coffre** (un Durable Object Cloudflare par joueur), rangé sous **le nom donné à la porte d'entrée** (sans tenir compte des majuscules ni des accents). Chaque modification y part dans la seconde.
+- Au lancement, et chaque fois qu'on revient sur l'onglet, le jeu compare les deux copies et garde **la plus récente**. Avec le même nom, on retrouve donc sa trésorerie de départ, son personnage et toutes ses données sur n'importe quel téléphone ou ordinateur, même après avoir vidé le navigateur.
+- Config › Sauvegarde indique si le coffre est actif et à quelle heure il a été mis à jour. **Exporter (JSON) / Importer** reste possible pour garder une copie à soi.
+- Le coffre est créé automatiquement au déploiement : rien à régler dans le tableau de bord.
+- *À savoir* : toute personne qui connaît le code d'accès et tape le même nom voit les mêmes données. Si deux appareils modifient en même temps, la dernière modification l'emporte.
 **Exporter (CSV)** sort tes dépenses pour Excel, avec `;` comme séparateur.
 
 ## La porte d'entrée : le code d'accès

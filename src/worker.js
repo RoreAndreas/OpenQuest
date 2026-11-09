@@ -5,7 +5,29 @@
    Chaque entrée (réussie ou non) est notée dans les journaux du projet, et dans le KV
    ACCESS_LOG s'il est relié : on sait ainsi qui a accès, et quand.
    ================================================================ */
-const SESSION = 'oq_session', NAME = 'oq_name', DAYS = 30;
+import {DurableObject} from 'cloudflare:workers';
+const SESSION = 'oq_session', NAME = 'oq_name', DAYS = 30, MAX_STATE = 1800000;
+
+// Le coffre de chaque joueur : un Durable Object par nom d'accès, qui garde la dernière copie de ses données
+export class Coffre extends DurableObject {
+  async lire() { return (await this.ctx.storage.get('etat')) || null; }
+  async ecrire(etat) { await this.ctx.storage.put('etat', etat); await this.ctx.storage.put('maj', Date.now()); return true; }
+}
+const coffreDe = (env, name) => env.COFFRES.get(env.COFFRES.idFromName('coffre:' + name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()));
+const json = (o, status = 200) => new Response(JSON.stringify(o), {status, headers: {'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store'}});
+async function api(request, env, who) {
+  if (!env.COFFRES) return json({erreur: 'coffre non configuré'}, 503);
+  const coffre = coffreDe(env, who);
+  if (request.method === 'GET') return json({etat: await coffre.lire()});
+  if (request.method === 'PUT') {
+    const body = await request.text();
+    if (body.length > MAX_STATE) return json({erreur: 'données trop volumineuses'}, 413);
+    let d; try { d = JSON.parse(body); } catch (e) { return json({erreur: 'JSON invalide'}, 400); }
+    if (!d || !Array.isArray(d.expenses) || !Array.isArray(d.categories)) return json({erreur: 'ce ne sont pas des données OpenQuest'}, 400);
+    await coffre.ecrire(body); return json({ok: true});
+  }
+  return json({erreur: 'méthode non permise'}, 405);
+}
 const enc = new TextEncoder();
 const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const b64urlText = s => b64url(enc.encode(s));
@@ -89,6 +111,7 @@ async function gate(context) {
     return new Response(null, {status: 303, headers: [['Location', '/'], ['Set-Cookie', `${SESSION}=${await makeSession(name, secret)}; Path=/; Max-Age=${max}; HttpOnly; SameSite=Lax${secure}`], ['Set-Cookie', `${NAME}=${encodeURIComponent(name)}; Path=/; Max-Age=${max}; SameSite=Lax${secure}`]]});
   }
   const who = await readSession(cookies(request)[SESSION], secret);
+  if (url.pathname === '/api/coffre') return who ? api(request, env, who) : json({erreur: 'session requise'}, 401);
   if (!who) return loginForm('');
   const res = await next();
   const out = new Response(res.body, res); out.headers.set('Cache-Control', 'private, no-store'); out.headers.set('X-Robots-Tag', 'noindex');

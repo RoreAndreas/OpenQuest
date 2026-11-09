@@ -9,5 +9,8 @@
     "binding": "ASSETS",
     "run_worker_first": true
   },
+  // Le coffre en ligne : un Durable Object (stockage SQLite) par joueur, créé automatiquement au déploiement
+  "durable_objects": { "bindings": [{ "name": "COFFRES", "class_name": "Coffre" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Coffre"] }],
   "observability": { "enabled": true }
 }

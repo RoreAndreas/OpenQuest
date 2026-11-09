@@ -863,12 +863,47 @@ function load() {
   } catch (e) { storageOK = false; }
   return null;
 }
-function save() {
+// touch : une vraie modification de l'utilisateur ; elle date la sauvegarde et part dans le coffre en ligne
+function save(touch) {
+  if (touch) S.savedAt = Date.now();
   try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); storageOK = true; }
   catch (e) { storageOK = false; }
+  if (touch) syncPush();
   $('#banner').innerHTML = storageOK ? '' : `<div class="banner">⚠ Impossible d'enregistrer dans ce navigateur (navigation privée ?). Exporte tes données depuis Config › Sauvegarde pour ne rien perdre.</div>`;
 }
 let S = null; // initialisé au démarrage (bas du fichier)
+
+/* ---- Le coffre en ligne : une copie des données sur Cloudflare, rangée sous le nom donné à la porte d'entrée.
+   Le navigateur garde son cache (localStorage) ; la version la plus récente l'emporte. ---- */
+const SYNC = {on: false, timer: null, last: null, err: false};
+const syncable = () => /^https?:$/.test(location.protocol) && typeof accessName === 'function' && !!accessName();
+function syncPush() {
+  if (!SYNC.on) return;
+  clearTimeout(SYNC.timer);
+  SYNC.timer = setTimeout(async () => {
+    try { const r = await fetch('/api/coffre', {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(S), credentials: 'same-origin'}); SYNC.err = !r.ok; if (r.ok) SYNC.last = Date.now(); }
+    catch (e) { SYNC.err = true; }
+    if (UI.place === 'home' && UI.sub === 'save') renderUI();
+  }, 700);
+}
+async function syncPull() {
+  if (!syncable()) return;
+  try {
+    const r = await fetch('/api/coffre', {cache: 'no-store', credentials: 'same-origin'}); if (!r.ok) { SYNC.err = true; return; }
+    SYNC.on = true; SYNC.err = false;
+    const {etat} = await r.json(), remote = etat ? migrate(JSON.parse(etat)) : null;
+    if (remote && (remote.savedAt || 0) > (S.savedAt || 0)) { // la copie en ligne est plus récente : on la reprend
+      const fresh = !S.onboarded;
+      S = remote; save(false); SYNC.last = Date.now();
+      SCENE.key = ''; SCENE.walkers = [];
+      if (fresh || !$('#modal').hidden) closeModal();
+      UI.dlg = null; renderUI(); progress(UI.game, true);
+      if (fresh) toast('Données retrouvées', `Bon retour, ${heroName()} ! Tes données en ligne ont été rechargées.`);
+    } else if (!remote) { if (S.onboarded) save(true); else SYNC.last = Date.now(); } // coffre vide : on y dépose ce que l'appareil a déjà
+    else if ((S.savedAt || 0) > (remote.savedAt || 0)) syncPush();
+    else SYNC.last = Date.now();
+  } catch (e) { SYNC.err = true; }
+}
 
 
 /* ---------------- CALCULS ---------------- */
@@ -1771,7 +1806,7 @@ function homePanel(s, g) {
   if (s === 'char') return charPanel();
   if (s === 'cash') return cashPanel(g);
   if (s === 'skins') return `<div class="list">${Object.entries(SKINS).map(([k, sk]) => { const on = S.world.skins.includes(k), src = CHESTS.find(c => c.skin === k); return `<button class="li ${on ? '' : 'off'} ${S.world.skin === k ? 'sel' : ''}" ${on ? `data-act="skin" data-id="${k}"` : 'disabled'}>${robotImg('hero|' + heroChar() + '|' + k + '|' + JSON.stringify(heroLook()), heroOutfitFor(k, heroLook(), heroChar()), 32, on ? {} : {grey: true})}<span class="grow">${on ? esc(sk.name) : '???'}<br><small class="dim">${on ? (S.world.skin === k ? 'Portée' : 'Toucher pour porter') : esc(src && src.cond ? 'À débloquer : ' + src.cond.txt : '')}</small></span></button>`; }).join('')}</div>`;
-  if (s === 'save') return `<p class="dim">Tes données restent sur cet appareil. Exporte-les pour les garder ou les transférer.</p><div class="col gap"><button class="ffbtn" data-act="export">Exporter (JSON)</button><button class="ffbtn" data-act="csv">Exporter (CSV)</button><button class="ffbtn" data-act="import">Importer</button><button class="ffbtn red" data-act="reset">Tout effacer</button></div><input type="file" id="importFile" accept=".json,application/json" hidden>`;
+  if (s === 'save') return `${SYNC.on ? `<p>${SYNC.err ? '<span class="red">Coffre en ligne injoignable</span> : tes données sont gardées sur cet appareil et repartiront dès que possible.' : `<span class="green">Coffre en ligne actif</span> pour <b class="gold">${esc(accessName())}</b>${SYNC.last ? ` · à jour à ${new Date(SYNC.last).toTimeString().slice(0, 5)}` : ''}. Tes données te suivent sur tous tes appareils, avec le même nom à l'entrée.`}</p>` : `<p class="dim">Tes données restent sur cet appareil. Exporte-les pour les garder ou les transférer.</p>`}<div class="col gap"><button class="ffbtn" data-act="export">Exporter (JSON)</button><button class="ffbtn" data-act="csv">Exporter (CSV)</button><button class="ffbtn" data-act="import">Importer</button><button class="ffbtn red" data-act="reset">Tout effacer</button></div><input type="file" id="importFile" accept=".json,application/json" hidden>`;
   if (s === 'rules') return `<p>Chaque catégorie a son budget du mois. Le <b class="gold">budget du jour</b> = ce qui reste ÷ jours restants.</p><p><b class="gold">XP par jour</b> : +10 journal tenu, +2 par dépense notée (5 max), +30 à +50 sous le budget du jour (plus tu restes loin de la limite, plus ça rapporte), +20 sans dépense, +15 par quête, +25 si toutes sont faites, +5 par mesure (+10 si l'objectif est atteint).</p><p><b class="gold">Combo</b> : chaque jour de série ajoute 4 % à l'XP du jour, jusqu'à ×2. Paliers : +150 XP à 7 et 14 jours, +500 à 30, 60 et 100.</p><p><b class="gold">Fin de mois</b> : +300 XP si le mois est sous le budget, +40 par catégorie tenue.</p><p><b class="gold">Niveaux</b> : chaque niveau demande 75 XP de plus que le précédent, et débloque souvent un accessoire.</p><p><b class="gold">La ville en contrebas</b> part de zéro : chaque jour terminé sous le budget du jour lui ajoute une construction (chemin, arbre, maison, puits, moulin, lac, église… jusqu'au royaume). Le chantier du jour apparaît dès que la journée est sur la bonne voie.</p><p><b class="gold">Météo</b> : soleil sous le budget du jour, nuages près de la limite, pluie au-delà, orage si une catégorie déborde.</p>`;
   return `<label class="dim">Nom du héros</label><input class="full" value="${esc(S.heroName)}" maxlength="20" data-chg="heroName" placeholder="${esc(CHARS[heroChar()].name)}"><div class="kv"><span>Niveau</span><b>${g.level} · ${titleFor(g.level)}</b><span>PV</span><b>${g.hp}/100</b><span>XP</span><b>${num(g.xpIn)}/${num(g.xpNext)}</b><span>Trésorerie</span><b>${g.cash == null ? '—' : fmt(g.cash)}</b></div>${accessName() ? `<p class="dim">Accès ouvert pour <b class="gold">${esc(accessName())}</b>.</p><a class="ffbtn full center" href="/sortie">Se déconnecter</a>` : ''}<div class="col gap"><button class="ffbtn" data-act="sound">Sons : ${S.sound ? 'oui' : 'non'}</button><button class="ffbtn" data-act="music">Musique : ${MUSIC.on ? 'oui' : 'non'}</button></div>`;
 }
@@ -1821,7 +1856,7 @@ function chooseMenu(i) {
 function toast(title, msg) { const box = $('#toasts'); while (box.children.length >= 3) box.firstChild.remove(); const el = document.createElement('div'); el.className = 'ff toast'; el.innerHTML = `<b class="gold">${esc(title)}</b><br>${esc(msg)}`; $('#toasts').appendChild(el); setTimeout(() => el.remove(), 3600); }
 function commit(fx) {
   const before = UI.game || computeGame();
-  save(); const g = renderUI();
+  save(true); const g = renderUI();
   if (g.xp > before.xp) { toast('+' + (g.xp - before.xp) + ' XP', fx || 'Bien joué !'); UI.cheerUntil = performance.now() + 1800; }
   progress(g);
 }
@@ -1895,19 +1930,19 @@ const ACT = {
   month: a => { UI.viewYM = addMonths(UI.viewYM, +a.dataset.d); UI.selDay = null; SFX.click(); renderUI(); },
   pickChar: a => { if (!CHARS[a.dataset.k]) return; const was = heroChar(); S.world.hero = a.dataset.k; if (!S.heroName || S.heroName === CHARS[was].name) S.heroName = ''; SFX.quest(); commit(); },
   welcomeChar: a => { if (!CHARS[a.dataset.k]) return; S.world.hero = a.dataset.k; SFX.click(); welcome(2); },
-  welcomeBack: () => { SFX.click(); welcome(); },
+  welcomeBack: () => { const c = $('#modalBox [name=cash]'); if (c) UI.welcomeCash = c.value; SFX.click(); welcome(); },
   delIncome: a => { const e = S.incomes.find(x => x.id === a.dataset.id); if (e && confirm(`Supprimer la rentrée de ${fmt(e.amount)} ?`)) { S.incomes = S.incomes.filter(x => x !== e); commit(); } },
   goCash: () => openPlace('home', 'cash'),
   goProgress: () => openPlace('board', 'progress'),
   delCat: a => { const c = catOf(a.dataset.id); if (!c) return; if (S.categories.length <= 1) return alert('Il faut garder au moins une catégorie.'); const n = S.expenses.filter(e => e.catId === c.id).length; if (n) return alert(`${n} dépense(s) utilisent « ${c.name} » : renomme-la plutôt.`); if (confirm(`Supprimer « ${c.name} » ?`)) { S.categories = S.categories.filter(x => x !== c); commit(); } },
   look: a => { const v = a.dataset.v || null; if (v && ACCS[v] && ACCS[v].lv > (UI.game || computeGame()).level) return; S.world.look = {...heroLook(), [a.dataset.k]: v}; SFX.click(); commit(); },
   skin: a => { if (!S.world.skins.includes(a.dataset.id)) return; S.world.skin = a.dataset.id; SFX.quest(); commit(); },
-  sound: () => { S.sound = !S.sound; save(); renderUI(); SFX.click(); },
+  sound: () => { S.sound = !S.sound; save(true); renderUI(); SFX.click(); },
   music: () => { toggleMusic(); renderUI(); },
   export: () => download(`budget-quest-${today()}.json`, JSON.stringify(S, null, 2), 'application/json'),
   csv: () => { const q = s => `"${String(s).replace(/"/g, '""')}"`; download(`depenses-${today()}.csv`, '﻿' + ['date;montant_fcfa;categorie;note', ...[...S.expenses].sort((a, b) => a.date.localeCompare(b.date)).map(e => [e.date, e.amount, q((catOf(e.catId) || {}).name || ''), q(e.note || '')].join(';'))].join('\r\n'), 'text/csv;charset=utf-8'); },
   import: () => $('#importFile').click(),
-  reset: () => { if (!confirm('Effacer TOUTES les données ?') || !confirm('Vraiment ? Pense à exporter avant.')) return; S = defaultState(); save(); closePlace(); welcome(); },
+  reset: () => { if (!confirm('Effacer TOUTES les données ?') || !confirm('Vraiment ? Pense à exporter avant.')) return; S = defaultState(); S.onboarded = false; save(true); closePlace(); welcome(); },
 };
 document.addEventListener('click', e => { const a = e.target.closest('[data-act]'); if (!a || a.disabled) return; const f = ACT[a.dataset.act]; if (f) { e.preventDefault(); f(a, e); } });
 document.addEventListener('input', e => {
@@ -1923,7 +1958,7 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('change', e => {
   const t = e.target, k = t.dataset.chg, c = t.dataset.id && catOf(t.dataset.id);
-  if (t.id === 'importFile') { const f = t.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { const d = JSON.parse(r.result); if (!d || !Array.isArray(d.expenses) || !Array.isArray(d.categories)) throw 0; if (!confirm(`Importer ${d.expenses.length} dépenses ? Les données actuelles seront remplacées.`)) return; S = migrate(d); save(); renderUI(); toast('Import réussi', `${S.expenses.length} dépenses chargées.`); } catch (err) { alert("Ce fichier n'est pas une sauvegarde Budget Quest."); } }; r.readAsText(f); t.value = ''; return; }
+  if (t.id === 'importFile') { const f = t.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { const d = JSON.parse(r.result); if (!d || !Array.isArray(d.expenses) || !Array.isArray(d.categories)) throw 0; if (!confirm(`Importer ${d.expenses.length} dépenses ? Les données actuelles seront remplacées.`)) return; S = migrate(d); save(true); renderUI(); toast('Import réussi', `${S.expenses.length} dépenses chargées.`); } catch (err) { alert("Ce fichier n'est pas une sauvegarde Budget Quest."); } }; r.readAsText(f); t.value = ''; return; }
   if (k === 'heroName') { S.heroName = t.value.trim().slice(0, 20); commit(); }
   else if (k === 'catName' && c) { if (t.value.trim()) c.name = t.value.trim().slice(0, 24); commit(); }
   else if (k === 'trackerDate') { UI.trackerDate = t.value && t.value <= today() ? t.value : today(); renderUI(); }
@@ -1948,7 +1983,7 @@ document.addEventListener('submit', e => {
   else if (k === 'tracker') { S.trackers.push({id: uid(), name: v('name').trim(), unit: v('unit').trim(), goal: v('goal') === '' ? '' : +v('goal'), dir: v('dir') || 'min'}); UI.sub = 'measures'; SFX.coin(); commit(); }
   else if (k === 'track') { const val = v('v'); if (val === '' || isNaN(+val)) return; const d = UI.trackerDate; S.trackerLog[d] = S.trackerLog[d] || {}; S.trackerLog[d][f.dataset.id] = +val; SFX.coin(); commit('Mesure enregistrée.'); }
   else if (k === 'cat') { const id = uid(), mons = Object.keys(MONS), cols = Object.keys(COLORS); S.categories.push({id, name: v('name').trim(), monster: mons[S.categories.length % mons.length], color: cols[S.categories.length % cols.length], budget: 0}); S.budgets[UI.viewYM] = S.budgets[UI.viewYM] || {}; S.budgets[UI.viewYM][id] = parseAmt(v('budget')); commit(); }
-  else if (k === 'welcome') { S.onboarded = true; S.heroName = v('name').trim().slice(0, 20) || CHARS[heroChar()].name; const c = v('cash'); if (c.trim()) { S.startCash = parseAmt(c); S.startDate = today(); } closeModal(); save(); renderUI(); progress(UI.game, true); UI.dlg = idleDlg(); renderUI(); }
+  else if (k === 'welcome') { S.onboarded = true; S.heroName = v('name').trim().slice(0, 20) || CHARS[heroChar()].name; const c = v('cash'); if (c.trim()) { S.startCash = parseAmt(c); S.startDate = today(); } UI.welcomeCash = ''; closeModal(); save(true); renderUI(); progress(UI.game, true); UI.dlg = idleDlg(); renderUI(); }
   else if (k === 'income') { const amount = parseAmt(v('amount')); if (!amount) { toast('Montant ?', 'Indique combien tu as reçu.'); return; } S.incomes.push({id: uid(), date: v('date') || today(), amount, note: v('note').trim().slice(0, 60)}); SFX.coin(); toast('Rentrée notée', `+${fmt(amount)} dans la trésorerie.`); UI.sub = 'income'; commit(); }
   else if (k === 'budgets') { // valider les budgets du mois affiché
     const ym = UI.viewYM, row = S.budgets[ym] = S.budgets[ym] || {}; let changed = 0;
@@ -1960,7 +1995,7 @@ document.addEventListener('submit', e => {
 function welcome(step) { // l'accueil : choisir son personnage, puis son nom et sa trésorerie de départ
   if (!step) return modal(`<div class="center"><div class="gold big">BUDGET QUEST</div><p>Depuis son PC de l'Open Space, Roré veille sur la cité suspendue. Choisis qui tu seras dans la cité.</p></div><div class="chars">${CHAR_ORDER.map(k => `<button class="charc" data-act="welcomeChar" data-k="${k}">${robotImg(k, CHARS[k].outfit, 44)}<b>${esc(CHARS[k].name)}</b><small>${esc(CHARS[k].archetype)}</small>${CHARS[k].isNew ? '<i class="new">NOUVEAU</i>' : ''}</button>`).join('')}</div>`);
   const k = heroChar();
-  modal(`<div class="center">${robotImg(k, CHARS[k].outfit, 80)}<div class="gold">${esc(CHARS[k].name.toUpperCase())}</div><small class="dim">${esc(CHARS[k].archetype)}</small></div><form data-form="welcome" autocomplete="off"><label class="dim">Nom du héros</label><input name="name" class="full" value="${esc(CHARS[k].name)}" maxlength="20"><label class="dim">Trésorerie de départ (ce que tu as aujourd'hui)</label><div class="row"><input name="cash" class="amount" inputmode="numeric" placeholder="0"><span class="gold">F</span></div><p class="dim">Tu pourras la changer dans Config › Trésorerie. La vallée en contrebas est vide : elle se bâtira jour après jour.</p><div class="row"><button type="button" class="ffbtn" data-act="welcomeBack">◂ Retour</button><button class="ffbtn grow">Commencer</button></div></form>`);
+  modal(`<div class="center">${robotImg(k, CHARS[k].outfit, 80)}<div class="gold">${esc(CHARS[k].name.toUpperCase())}</div><small class="dim">${esc(CHARS[k].archetype)}</small></div><form data-form="welcome" autocomplete="off"><label class="dim">Nom du héros</label><input name="name" class="full" value="${esc(CHARS[k].name)}" maxlength="20"><label class="dim">Trésorerie de départ (ce que tu as aujourd'hui)</label><div class="row"><input name="cash" class="amount" inputmode="numeric" placeholder="0" value="${esc(UI.welcomeCash || '')}"><span class="gold">F</span></div><p class="dim">Tu pourras la changer dans Config › Trésorerie. La vallée en contrebas est vide : elle se bâtira jour après jour.</p><div class="row"><button type="button" class="ffbtn" data-act="welcomeBack">◂ Retour</button><button class="ffbtn grow">Commencer</button></div></form>`);
 }
 
 
@@ -2043,7 +2078,7 @@ function handCursor() { // la main gantée des menus, dessinée au pixel
   document.documentElement.style.setProperty('--hand', `url(${c.toDataURL()})`);
 }
 function boot() {
-  S = load() || defaultState(); save();
+  S = load() || defaultState(); save(false);
   handCursor(); sizeScene();
   UI.game = computeGame(); UI.dlg = S.onboarded && !S.expenses.length ? idleDlg() : null;
   SCENE.cam = clampCam(0);
@@ -2062,6 +2097,7 @@ function boot() {
   };
   requestAnimationFrame(loop);
   if (window.ResizeObserver) new ResizeObserver(() => { sizeScene(); SCENE.cam = clampCam(SCENE.cam); if (SCENE.focus) focusPlace(SCENE.focus); }).observe($('.view'));
+  syncPull(); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncPull(); });
   addEventListener('resize', () => { sizeScene(); SCENE.cam = clampCam(SCENE.cam); if (SCENE.target != null && SCENE.focus) focusPlace(SCENE.focus); });
 }
 boot();
