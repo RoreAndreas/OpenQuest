@@ -154,20 +154,22 @@ Le bouton **🎁**, à côté de ⚙ en haut à droite, ouvre le Belvédère : l
 
 ## Les remboursements (hors budget)
 
-Marché › **Rembours.** garde la trace de l'argent avancé ou dû, **sans toucher au budget** : ni le budget du jour, ni l'XP, ni la météo, ni la ville en contrebas ne bougent. Seule la trésorerie suit.
+Marché › **Rembours.** garde la trace de l'argent avancé ou dû, **sans toucher au budget** : ni le budget du jour, ni l'XP, ni la météo, ni la ville en contrebas ne bougent.
 
-| Cas | À la saisie | Quand c'est réglé (✓) |
-|---|---|---|
-| **J'ai avancé de l'argent** (on me doit) | La trésorerie baisse | La trésorerie remonte |
-| **On a payé à ma place** (je dois) | Rien ne bouge | La trésorerie baisse |
-| **On m'a prêté de l'argent** (je dois) | La trésorerie monte | La trésorerie baisse |
+**Un prêt reçu ou une avance faite est déjà dans ta trésorerie de départ** : le noter ne la change pas, pour éviter un double comptage. Seuls les remboursements réellement encaissés ou versés ensuite (bouton ✓, partiel possible) font bouger la trésorerie.
+- Pour un prêt ou une avance fait **après** ta trésorerie de départ, coche « Pas encore dans ma trésorerie » : il sera alors compté.
+- Trois cas : « J'ai avancé de l'argent » (on me doit), « On a payé à ma place » et « On m'a prêté de l'argent » (je dois).
 
-- Chaque ligne note qui, combien, pour quoi et quand. En haut de l'écran : « On te doit » (+), « Tu dois » (−) et leur **solde**, négatif quand tu dois plus qu'on ne te doit.
-- Le bouton ✓ accepte un remboursement partiel : la ligne reste en attente jusqu'à ce que tout soit rendu.
-- L'écran Trésorerie distingue :
-  - **Disponible** : l'argent réellement en main (prêts reçus et remboursements reçus en plus, avances faites et remboursements versés en moins) ;
-  - **Remboursements en attente** : on te doit − tu dois ;
-  - **Trésorerie nette** : le disponible une fois tous les remboursements réglés. Les prévisions partent de la trésorerie nette.
+L'écran montre trois soldes :
+
+| Bloc | Contenu |
+|---|---|
+| **Déjà réglé** | Encaissé (on t'a remboursé), remboursé par toi, **solde réel** |
+| **Encore dû** | On te doit, tu dois, **solde théorique** (négatif si tu dois plus qu'on ne te doit) |
+| **Combiné** | Solde réel + théorique, trésorerie d'aujourd'hui, et la trésorerie **si tout est remboursé et encaissé** |
+
+L'écran Trésorerie reprend le même calcul : le **disponible** (départ + rentrées − dépenses + remboursements encaissés − remboursements versés), puis la trésorerie **si tout est remboursé et encaissé**, dont partent les prévisions.
+
 ## L'XP : chaque jour compte
 
 | Ce qui rapporte, chaque jour | XP |

@@ -116,6 +116,7 @@ button.li{cursor:pointer} button.li:hover{background:rgba(255,255,255,.08)}
 .choices input{accent-color:#ffd166;width:16px;height:16px;margin:0}
 .choices label:has(input:checked){outline:2px solid var(--gold);outline-offset:-2px}
 .rf-dir{font-size:20px;width:18px;text-align:center}
+.check{display:flex;align-items:center;gap:8px;margin:4px 0;cursor:pointer}.check input{accent-color:#ffd166;width:16px;height:16px;margin:0;flex:none}
 .li.chg{outline:2px solid var(--gold);outline-offset:-2px}
 #budOk{position:sticky;bottom:0;margin-top:8px;box-shadow:0 0 0 1px #06061a,0 -6px 10px rgba(6,6,26,.6)}
 .li.chg input{color:var(--gold)}
@@ -900,7 +901,7 @@ function migrate(s) {
   s.world.look = nl;
   const okDate = d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d), amt = v => Math.max(0, Math.round(+v || 0));
   s.wishes = s.wishes.filter(w => w && typeof w.name === 'string' && /^\d{4}-\d{2}$/.test(w.month)).map(w => ({...w, price: amt(w.price), bought: w.bought && okDate(w.bought.date) ? {...w.bought, amount: amt(w.bought.amount)} : null}));
-  s.refunds = s.refunds.filter(r => r && okDate(r.date) && ['owed', 'owe'].includes(r.dir)).map(r => ({...r, amount: amt(r.amount), how: r.how === 'cash' ? 'cash' : 'paid', pays: (Array.isArray(r.pays) ? r.pays : []).filter(x => x && okDate(x.date)).map(x => ({...x, amount: amt(x.amount)}))}));
+  s.refunds = s.refunds.filter(r => r && okDate(r.date) && ['owed', 'owe'].includes(r.dir)).map(r => ({...r, addCash: !!r.addCash, amount: amt(r.amount), how: r.how === 'cash' ? 'cash' : 'paid', pays: (Array.isArray(r.pays) ? r.pays : []).filter(x => x && okDate(x.date)).map(x => ({...x, amount: amt(x.amount)}))}));
   s.incomes = s.incomes.filter(e => e && typeof e.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(e.date)).map(e => ({...e, amount: Math.max(0, Math.round(+e.amount || 0))}));
   s.expenses = s.expenses.filter(e => e && typeof e.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(e.date)).map(e => ({...e, amount: Math.max(0, Math.round(+e.amount || 0))}));
   return s;
@@ -1128,10 +1129,12 @@ function computeGame() {
   // les remboursements passent par la trésorerie, jamais par les dépenses : le budget du jour n'en sait rien
   // 1) l'argent réellement passé de main en main : prêts reçus, avances faites, remboursements reçus ou versés
   // 2) ce qui reste dû : on te doit (+) et tu dois (−) ; la trésorerie nette en tient compte
-  let loansIn = 0, advancesOut = 0, repaidIn = 0, repaidOut = 0, owedOpen = 0, oweOpen = 0;
+  let loansIn = 0, advancesOut = 0, repaidIn = 0, repaidOut = 0, owedOpen = 0, oweOpen = 0, gotBack = 0, gaveBack = 0;
   for (const r of S.refunds) {
     const paid = r.pays.reduce((a, x) => a + x.amount, 0), rest = Math.max(0, r.amount - paid), owed = r.dir === 'owed';
-    if (r.date >= sd) { if (owed) advancesOut += r.amount; else if (r.how === 'cash') loansIn += r.amount; }
+    // le prêt reçu ou l'avance faite est déjà dans la trésorerie d'ouverture : il ne compte que si on l'a demandé (« pas encore dans ma trésorerie »)
+    if (r.addCash && r.date >= sd) { if (owed) advancesOut += r.amount; else if (r.how === 'cash') loansIn += r.amount; }
+    for (const x of r.pays) { if (owed) gotBack += x.amount; else gaveBack += x.amount; }
     for (const x of r.pays) if (x.date >= sd) { if (owed) repaidIn += x.amount; else repaidOut += x.amount; }
     if (owed) owedOpen += rest; else oweOpen += rest;
   }
@@ -1141,7 +1144,7 @@ function computeGame() {
   const buildToday = checkedToday && todaySum <= ms.todayAllowance;
   const g = {xp, level, xpIn: xp - base, xpNext: xpNeed(level), streak, best, victories, zeroDays, checkDays, nExp: S.expenses.length,
     nChests, buildDays, buildToday, builtNow: buildDays, built: buildDays, combo: comboOf(streak), bestCombo, xpToday, todayParts,
-    nHabit, nTrack, hp, treasure: savings, savings, cash, netCash, inc, out, refundNet, loansIn, advancesOut, repaidIn, repaidOut, pendingNet, owedOpen, oweOpen, underMonths, perfectMonths, ms, checkedToday};
+    nHabit, nTrack, hp, treasure: savings, savings, cash, netCash, inc, out, refundNet, loansIn, advancesOut, repaidIn, repaidOut, gotBack, gaveBack, pendingNet, owedOpen, oweOpen, underMonths, perfectMonths, ms, checkedToday};
   g.unlocked = ACH.filter(a => a.test(g)).map(a => a.id);
   return g;
 }
@@ -1937,12 +1940,15 @@ function charPanel() { // choisir son personnage : l'équipe de l'Open Space, et
 const refundRest = r => Math.max(0, r.amount - r.pays.reduce((a, x) => a + x.amount, 0));
 function refundRow(r) {
   const rest = refundRest(r), owed = r.dir === 'owed', done = rest === 0;
-  return `<div class="li ${done ? 'off' : ''}"><span class="rf-dir ${owed ? 'green' : 'red'}" title="${owed ? 'On me doit' : 'Je dois'}">${owed ? '↙' : '↗'}</span><span class="grow">${esc(r.who)}${r.note ? ` · ${esc(r.note)}` : ''}<br><small class="dim">${owed ? 'avancé' : r.how === 'cash' ? 'prêté' : 'payé pour moi'} le ${dayLabel(r.date)}${r.pays.length ? ` · ${done ? 'réglé' : `${fmt(r.amount - rest)} déjà rendus`}` : ''}</small></span><b class="${done ? 'dim' : owed ? 'green' : 'red'}">${fmt(done ? r.amount : rest)}</b>${done ? '' : `<button class="ffbtn sm" data-act="refundPay" data-id="${r.id}" title="${owed ? 'Marquer remboursé' : "J'ai remboursé"}">✓</button>`}<button class="x" data-act="delRefund" data-id="${r.id}" aria-label="Supprimer">×</button></div>`;
+  return `<div class="li ${done ? 'off' : ''}"><span class="rf-dir ${owed ? 'green' : 'red'}" title="${owed ? 'On me doit' : 'Je dois'}">${owed ? '↙' : '↗'}</span><span class="grow">${esc(r.who)}${r.note ? ` · ${esc(r.note)}` : ''}<br><small class="dim">${owed ? 'avancé' : r.how === 'cash' ? 'prêté' : 'payé pour moi'} le ${dayLabel(r.date)}${r.addCash ? ' · compté dans la trésorerie' : ''}${r.pays.length ? ` · ${done ? 'réglé' : `${fmt(r.amount - rest)} déjà rendus`}` : ''}</small></span><b class="${done ? 'dim' : owed ? 'green' : 'red'}">${fmt(done ? r.amount : rest)}</b>${done ? '' : `<button class="ffbtn sm" data-act="refundPay" data-id="${r.id}" title="${owed ? 'Marquer remboursé' : "J'ai remboursé"}">✓</button>`}<button class="x" data-act="delRefund" data-id="${r.id}" aria-label="Supprimer">×</button></div>`;
 }
 function refundPanel(g) { // les remboursements : hors budget, ils ne passent que par la trésorerie
   const open = S.refunds.filter(r => refundRest(r) > 0).sort((a, b) => a.date.localeCompare(b.date)), done = S.refunds.filter(r => refundRest(r) === 0).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
-  return `<div class="kv"><span>On te doit</span><b class="green">+${fmt(g.owedOpen)}</b><span>Tu dois</span><b class="${g.oweOpen ? 'red' : ''}">−${fmt(g.oweOpen)}</b><span class="gold">Solde</span><b class="${g.pendingNet < 0 ? 'red' : g.pendingNet > 0 ? 'green' : ''}">${fmtS(g.pendingNet)}</b></div>${g.pendingNet ? `<p class="dim">${g.pendingNet < 0 ? 'Tu dois plus qu\'on ne te doit.' : 'On te doit plus que tu ne dois.'}</p>` : ''}
-    <p class="dim">Hors budget : seule la trésorerie bouge.</p>
+  const real = g.gotBack - g.gaveBack;
+  return `<div class="gold">DÉJÀ RÉGLÉ</div><div class="kv"><span>Encaissé (on t'a remboursé)</span><b class="green">+${fmt(g.gotBack)}</b><span>Remboursé par toi</span><b class="${g.gaveBack ? 'red' : ''}">−${fmt(g.gaveBack)}</b><span class="gold">Solde réel</span><b class="${real < 0 ? 'red' : real > 0 ? 'green' : ''}">${fmtS(real)}</b></div>
+    <div class="gold">ENCORE DÛ</div><div class="kv"><span>On te doit</span><b class="green">+${fmt(g.owedOpen)}</b><span>Tu dois</span><b class="${g.oweOpen ? 'red' : ''}">−${fmt(g.oweOpen)}</b><span class="gold">Solde théorique</span><b class="${g.pendingNet < 0 ? 'red' : g.pendingNet > 0 ? 'green' : ''}">${fmtS(g.pendingNet)}</b></div>
+    <div class="gold">COMBINÉ</div><div class="kv"><span>Solde réel + théorique</span><b class="${real + g.pendingNet < 0 ? 'red' : real + g.pendingNet > 0 ? 'green' : ''}">${fmtS(real + g.pendingNet)}</b>${g.cash != null ? `<span>Trésorerie aujourd'hui</span><b>${fmt(g.cash)}</b><span class="gold">Si tout est remboursé et encaissé</span><b class="gold ${g.netCash < 0 ? 'red' : ''}">${fmt(g.netCash)}</b>` : ''}</div>
+    <p class="dim">Le prêt ou l'avance de départ est déjà dans ta trésorerie : seuls les remboursements encaissés ou versés la font bouger. Hors budget : le budget du jour ne change pas.</p>
     <form data-form="refund" autocomplete="off"><div class="choices">
       <label><input type="radio" name="kind" value="owed" checked><span>J'ai avancé de l'argent <small class="dim">(on me doit)</small></span></label>
       <label><input type="radio" name="kind" value="owe-paid"><span>On a payé à ma place <small class="dim">(je dois)</small></span></label>
@@ -1950,6 +1956,7 @@ function refundPanel(g) { // les remboursements : hors budget, ils ne passent qu
       <input name="who" class="full" placeholder="Qui ? (Awa, le bureau…)" maxlength="40" required>
       <div class="row"><input class="amount" name="amount" inputmode="numeric" placeholder="0" aria-label="Montant"><span class="gold">F</span></div>
       <input name="note" class="full" placeholder="Pour quoi ? (déjeuner, taxi…)" maxlength="60">
+      <label class="check"><input type="checkbox" name="addCash"><span>Pas encore dans ma trésorerie <small class="dim">(prêt ou avance fait après ma trésorerie de départ)</small></span></label>
       <div class="row"><input type="date" name="date" class="grow" value="${today()}"><button class="ffbtn">Ajouter</button></div></form>
     <div class="gold">EN ATTENTE</div>${open.length ? `<div class="list">${open.map(refundRow).join('')}</div>` : '<p class="dim">Rien en attente.</p>'}
     ${done.length ? `<div class="gold">RÉGLÉS</div><div class="list">${done.map(refundRow).join('')}</div>` : ''}`;
@@ -1965,7 +1972,7 @@ function cashPanel(g) { // la trésorerie : le solde du jour, et d'où il vient
   const head = `<div class="row between wrap"><span class="gold">TRÉSORERIE</span><b class="big ${g.cash != null && g.cash < 0 ? 'red' : ''}">${g.cash == null ? '—' : fmt(g.cash)}</b></div>`;
   const calc = g.cash == null ? '<p class="dim">Indique combien tu as aujourd\'hui : la trésorerie suivra ensuite tes dépenses, tes rentrées et tes remboursements.</p>'
     : `<div class="kv"><span>Départ (${sdShort})</span><b>${fmt(S.startCash)}</b><span>+ Rentrées</span><b class="green">${fmt(g.inc)}</b><span>− Dépenses</span><b class="red">${fmt(g.out)}</b>${g.loansIn ? `<span>+ Prêts reçus</span><b class="green">${fmt(g.loansIn)}</b>` : ''}${g.advancesOut ? `<span>− Avances faites</span><b class="red">${fmt(g.advancesOut)}</b>` : ''}${g.repaidIn ? `<span>+ Remboursements reçus</span><b class="green">${fmt(g.repaidIn)}</b>` : ''}${g.repaidOut ? `<span>− Remboursements versés</span><b class="red">${fmt(g.repaidOut)}</b>` : ''}<span class="gold">= Disponible</span><b class="gold">${fmt(g.cash)}</b></div>
-      ${g.pendingNet || g.owedOpen || g.oweOpen ? `<div class="kv">${g.owedOpen ? `<span>+ On te doit encore</span><b class="green">${fmt(g.owedOpen)}</b>` : ''}${g.oweOpen ? `<span>− Tu dois encore</span><b class="red">${fmt(g.oweOpen)}</b>` : ''}<span>Remboursements en attente</span><b class="${g.pendingNet < 0 ? 'red' : 'green'}">${fmtS(g.pendingNet)}</b><span class="gold">= Trésorerie nette</span><b class="gold ${g.netCash < 0 ? 'red' : ''}">${fmt(g.netCash)}</b></div><p class="dim">La trésorerie nette, c'est ce qui te restera une fois tous les remboursements réglés.</p>` : ''}
+      ${g.pendingNet || g.owedOpen || g.oweOpen ? `<div class="kv">${g.owedOpen ? `<span>+ On te doit encore</span><b class="green">${fmt(g.owedOpen)}</b>` : ''}${g.oweOpen ? `<span>− Tu dois encore</span><b class="red">${fmt(g.oweOpen)}</b>` : ''}<span>Remboursements en attente</span><b class="${g.pendingNet < 0 ? 'red' : 'green'}">${fmtS(g.pendingNet)}</b><span class="gold">= Si tout est remboursé et encaissé</span><b class="gold ${g.netCash < 0 ? 'red' : ''}">${fmt(g.netCash)}</b></div><p class="dim">La trésorerie nette, c'est ce qui te restera une fois tous les remboursements réglés.</p>` : ''}
       ${beforeSum ? `<p class="dim">${before.length > 1 ? `${before.length} dépenses de ce mois (${fmt(beforeSum)}) datent d'avant le départ : elles ne sont pas déduites` : `1 dépense de ce mois (${fmt(beforeSum)}) date d'avant le départ : elle n'est pas déduite`}. Recule la date de départ au 1er du mois si elle${before.length > 1 ? 's doivent' : ' doit'} compter.</p>` : ''}
       <div class="kv"><span>Fin du mois, budget épuisé${g.pendingNet ? ' (net)' : ''}</span><b>${fmt(g.netCash - Math.max(0, ms.remaining))}</b></div>`;
   return head + calc + `<div class="gold">DÉPART</div><form data-form="cash" class="col"><div class="row"><input name="amount" class="amount" inputmode="numeric" value="${S.startCash == null ? '' : num(S.startCash)}" placeholder="0" aria-label="Trésorerie de départ"><span class="gold">F</span></div>
@@ -2203,7 +2210,7 @@ document.addEventListener('submit', e => {
   else if (k === 'refund') {
     const amount = parseAmt(v('amount')), who = v('who').trim().slice(0, 40), kind = v('kind') || 'owed';
     if (!who) { toast('Qui ?', 'Indique avec qui.'); return; } if (!amount) { toast('Montant ?', 'Indique le montant.'); return; }
-    S.refunds.push({id: uid(), dir: kind === 'owed' ? 'owed' : 'owe', how: kind === 'owe-cash' ? 'cash' : 'paid', who, amount, date: v('date') || today(), note: v('note').trim().slice(0, 60), pays: []});
+    S.refunds.push({id: uid(), dir: kind === 'owed' ? 'owed' : 'owe', how: kind === 'owe-cash' ? 'cash' : 'paid', who, amount, date: v('date') || today(), note: v('note').trim().slice(0, 60), addCash: !!fd.get('addCash') && kind !== 'owe-paid', pays: []});
     SFX.coin(); toast('Remboursement noté', kind === 'owed' ? `${who} te doit ${fmt(amount)}. Ton budget du jour ne bouge pas.` : `Tu dois ${fmt(amount)} à ${who}. Ton budget du jour ne bouge pas.`); UI.sub = 'refund'; commit();
   }
   else if (k === 'refundPay') {
