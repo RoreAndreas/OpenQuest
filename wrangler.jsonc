@@ -1,0 +1,13 @@
+// Configuration du Worker « openquest » (déployé par Cloudflare Workers Builds à chaque push sur main).
+// Le secret TOKEN_PASS (le code d'accès) se règle dans le tableau de bord : Worker › Paramètres › Variables et secrets.
+{
+  "name": "openquest",
+  "main": "src/worker.js",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "observability": { "enabled": true }
+}

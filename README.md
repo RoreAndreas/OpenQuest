@@ -7,28 +7,35 @@ Un seul fichier : `index.html`. Il ne demande ni installation ni serveur.
 
 ## Utilisation
 
-Le jeu tient dans un seul fichier, `index.html`. Il est mis en ligne sur **Cloudflare Pages**, derrière une porte d'entrée : il faut donner son nom et le code d'accès pour entrer.
+Le jeu tient dans un seul fichier, `public/index.html`. Il est mis en ligne par un **Worker Cloudflare** (`openquest`), derrière une porte d'entrée : il faut donner son nom et le code d'accès pour entrer.
+
+| Fichier | Rôle |
+|---|---|
+| `public/index.html` | Le jeu |
+| `src/worker.js` | La porte d'entrée : vérifie le code, ouvre la session, note les entrées, puis sert le jeu |
+| `wrangler.jsonc` | La configuration du Worker (nom, fichiers statiques, journaux) |
 
 Les données restent dans le navigateur de chaque appareil (`localStorage`). Pour les sauvegarder ou les passer d'un appareil à l'autre, utilise **Config → Sauvegarde → Exporter (JSON) / Importer**.
 **Exporter (CSV)** sort tes dépenses pour Excel, avec `;` comme séparateur.
 
 ## La porte d'entrée : le code d'accès
 
-Au lancement, une fenêtre demande **ton nom** et **le code d'accès**. Le code est vérifié par Cloudflare (`functions/_middleware.js`), jamais dans la page : il n'apparaît nulle part dans le code du jeu.
+Au lancement, une fenêtre demande **ton nom** et **le code d'accès**. Le code est vérifié par le Worker, jamais dans la page : il n'apparaît nulle part dans le code du jeu.
 - Le bon code ouvre une session de 30 jours sur cet appareil. Config › Héros affiche le nom donné et un bouton **Se déconnecter**.
 - Chaque essai, réussi ou non, est noté avec le nom, la date, le pays et l'adresse IP : c'est ainsi qu'on sait qui a accès.
 - **Changer le code** (le secret `TOKEN_PASS`) ferme aussitôt toutes les sessions : chacun devra redonner le nouveau code.
 - Sans secret `TOKEN_PASS`, la porte reste fermée.
 
-### Mettre en ligne sur Cloudflare
+### Déploiement
 
-1. Tableau de bord Cloudflare → **Workers & Pages** → **Créer** → **Pages** → **Se connecter à Git** → choisir `RoreAndreas/OpenQuest`.
-2. Réglages de build : préréglage **Aucun**, commande de build **vide**, répertoire de sortie **vide** (la racine).
-3. Projet → **Paramètres** → **Variables et secrets** → **Ajouter** : type **Secret**, nom `TOKEN_PASS`, valeur = le code d'accès. L'ajouter pour la production (et l'aperçu si besoin).
-4. Relancer un déploiement pour qu'il prenne le secret.
-5. *Facultatif, pour garder la liste des entrées* : créer un espace de noms **KV** et le relier au projet sous le nom `ACCESS_LOG` (Paramètres → Liaisons). Chaque entrée y est gardée 180 jours.
+Chaque push sur `main` est déployé automatiquement par **Cloudflare Workers Builds** (`npx wrangler deploy`), sur le Worker `openquest`.
 
-**Voir qui est entré** : projet Pages → **Functions** → **Journaux en temps réel** (lignes `openquest_access`), ou les clés du KV `ACCESS_LOG` si tu l'as relié.
+**Le code d'accès** : tableau de bord Cloudflare → **Workers & Pages** → `openquest` → **Paramètres** → **Variables et secrets** → **Ajouter** : type **Secret**, nom `TOKEN_PASS`, valeur = le code. Un secret est gardé d'un déploiement à l'autre.
+
+**Voir qui est entré** : Worker `openquest` → **Observabilité** → **Journaux** (lignes `openquest_access`).
+*Facultatif, pour garder une liste des entrées* : créer un espace **KV** et le déclarer dans `wrangler.jsonc` sous le nom `ACCESS_LOG` (pas seulement dans le tableau de bord : chaque déploiement remplace les liaisons par celles du fichier). Chaque entrée y est gardée 180 jours.
+
+**Essayer en local** : créer un fichier `.dev.vars` contenant `TOKEN_PASS=un-code` (il est ignoré par git), puis lancer `npx wrangler dev`.
 
 **À savoir** : la porte protège le site mis en ligne, pas le dépôt. Tant que `RoreAndreas/OpenQuest` est public, son code reste lisible sur GitHub ; passe-le en privé si tu veux le cacher. N'active pas GitHub Pages : ce serait une seconde adresse, sans porte.
 

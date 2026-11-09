@@ -1,5 +1,5 @@
 /* ================================================================
-   OpenQuest — la porte d'entrée (Cloudflare Pages Functions)
+   OpenQuest — la porte d'entrée (Cloudflare Worker, fichiers statiques dans public/)
    Rien n'est servi tant que le visiteur n'a pas donné son nom et le bon code d'accès.
    Le code est le secret TOKEN_PASS du projet Cloudflare : il n'apparaît jamais dans la page.
    Chaque entrée (réussie ou non) est notée dans les journaux du projet, et dans le KV
@@ -65,7 +65,10 @@ ${msg ? `<p class="err">${esc(msg)}</p>` : ''}<form method="post" action="/acces
 <label for="c">Code d'accès</label><input id="c" name="code" type="password" maxlength="200" required>
 <button>Entrer</button></form>`, msg ? 401 : 200);
 
-export async function onRequest(context) {
+export default {
+  fetch(request, env, ctx) { return gate({request, env, waitUntil: p => ctx.waitUntil(p), next: () => env.ASSETS.fetch(request)}); },
+};
+async function gate(context) {
   const {request, env, next} = context, url = new URL(request.url), secret = env.TOKEN_PASS;
   if (!secret) return page(`<h1>ACCÈS FERMÉ</h1><p>Le code d'accès n'est pas configuré : ajoute le secret <b>TOKEN_PASS</b> au projet Cloudflare, puis redéploie.</p>`, 503);
   const secure = url.protocol === 'https:' ? '; Secure' : '';
