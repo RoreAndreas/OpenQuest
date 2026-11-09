@@ -103,6 +103,14 @@ Au début, la vallée est vide : des champs, des haies, une rivière.
 
 Entre ces étapes : des maisons, des arbres, des chemins et des potagers. La ville est complète au bout de 200 jours tenus.
 
+### Les petites animations du fond
+
+Discrètes, sur ordinateur seulement (coupées sur téléphone et quand l'appareil demande moins d'animations) :
+- **le ciel** : nuages qui glissent, une volée d'oiseaux de temps en temps, le dirigeable d'Ama, des étoiles filantes la nuit ;
+- **la vallée** : fumée des cheminées, ailes du moulin qui tournent, rivière et lac qui scintillent, barque qui glisse sur le lac ;
+- **la rue** : flammes des lanternes qui vacillent, un chat sur la balustrade qui remue la queue, des pigeons qui picorent puis s'envolent ;
+- **l'ambiance de l'heure** : pétales et feuilles au vent, brume du matin sur la vallée (6 h – 10 h), poussière dorée du soir (17 h – 21 h), lucioles la nuit.
+
 ### L'heure et la météo
 
 | Ce qui change | Ce qui le décide |
@@ -121,7 +129,7 @@ Tout passe par les fenêtres bleues du bas : on choisit avec la main, au doigt, 
 | **Dépense** | Le Marché | Zaza | Noter une dépense, noter une **rentrée** d'argent, pointer un jour sans dépense, revoir les dernières |
 | **Écarts** | La Banque des Écarts | Hares | Bilan du mois (budget, réel, écart, projection), écarts par catégorie, graphique jour par jour, plus grosses dépenses |
 | **Journal** | Les Archives | Margaux | Calendrier du mois, liste, modification et suppression |
-| **Quêtes** | Le Tableau des quêtes | Rook | Habitudes du jour, semaine, **progression**, trophées, nouvelle quête |
+| **Quêtes** | Le Tableau des quêtes | Rook | Habitudes du jour, semaine, **progression**, trophées, nouvelle quête, **Gérer** (renommer, supprimer : l'XP déjà gagnée reste acquise) |
 | **Suivis** | Le Labo | Boulon | Compteurs personnalisés avec un objectif « au moins » ou « au plus » |
 | **Trésorerie** | La Banque | Hares | Le solde d'aujourd'hui et son calcul (départ, rentrées, dépenses, remboursements), ce qui reste dû, le départ à modifier |
 | **🎁 (en haut à droite)** | Le Belvédère | Merlain | La wishlist (envies et projets), les prévisions sur 12 mois, un conseil |

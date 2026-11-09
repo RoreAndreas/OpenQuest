@@ -845,6 +845,7 @@ function defaultState() {
   return {
     version: 1, createdAt: today(), heroName: '', sound: true, lastLevel: 1, seenAch: [], lastCat: 'alim',
     startCash: null, startDate: today(), incomes: [], // trésorerie de départ et rentrées d'argent
+    oldHabits: [],        // les quêtes supprimées : on les garde pour que leur XP reste acquise
     wishes: [],           // la wishlist : { id, name, price, catId, month: 'YYYY-MM', note, bought: null | {date, amount, expId} }
     expectedIncome: null, // revenu mensuel prévu, pour les prévisions
     refunds: [],          // remboursements, hors budget : { id, dir: 'owed' (on me doit) | 'owe' (je dois), how, who, amount, date, note, pays: [{id, date, amount}] }
@@ -878,7 +879,7 @@ function defaultState() {
 function migrate(s) {
   const d = defaultState();
   for (const k of Object.keys(d)) if (s[k] === undefined) s[k] = d[k];
-  for (const k of ['categories','expenses','habits','trackers','seenAch','incomes','refunds','wishes']) if (!Array.isArray(s[k])) s[k] = d[k];
+  for (const k of ['categories','expenses','habits','trackers','seenAch','incomes','refunds','wishes','oldHabits']) if (!Array.isArray(s[k])) s[k] = d[k];
   if (s.expectedIncome != null && !isFinite(+s.expectedIncome)) s.expectedIncome = null;
   if (s.startCash != null && !isFinite(+s.startCash)) s.startCash = null;
   if (typeof s.startDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s.startDate)) s.startDate = s.createdAt || today();
@@ -1057,7 +1058,8 @@ function computeGame() {
   for (const d in S.habitLog) if (d < start) start = d;
   if (start > t) start = t;
   // quêtes et suivis, jour par jour
-  const habitIds = new Set(S.habits.map(h => h.id)), habitsByDay = {};
+  const habitIds = new Set([...S.habits, ...S.oldHabits].map(h => h.id)), habitsByDay = {};
+  const habitsOn = d => S.habits.length + S.oldHabits.filter(h => (h.removed || '') > d).length; // les quêtes qui existaient ce jour-là
   let nHabit = 0, habitsThisMonth = 0;
   for (const d in S.habitLog) { let c = 0; for (const id in S.habitLog[d]) if (S.habitLog[d][id] && habitIds.has(id)) c++; habitsByDay[d] = c; nHabit += c; if (ymOf(d) === tym) habitsThisMonth += c; }
   const trackIds = new Map(S.trackers.map(x => [x.id, x])), trackByDay = {};
@@ -1086,7 +1088,7 @@ function computeGame() {
         else { parts.push(['Sous le budget du jour', bonus]); victories++; buildDays++; }
       }
     } else if (!isToday) streak = 0;
-    if (habitsByDay[d]) { parts.push([`${habitsByDay[d]} quête${habitsByDay[d] > 1 ? 's' : ''}`, 15 * habitsByDay[d]]); if (S.habits.length >= 2 && habitsByDay[d] >= S.habits.length) parts.push(['Toutes les quêtes', 25]); }
+    if (habitsByDay[d]) { parts.push([`${habitsByDay[d]} quête${habitsByDay[d] > 1 ? 's' : ''}`, 15 * habitsByDay[d]]); if (habitsOn(d) >= 2 && habitsByDay[d] >= habitsOn(d)) parts.push(['Toutes les quêtes', 25]); }
     if (trackByDay[d]) parts.push(['Mesures de suivi', trackByDay[d]]);
     const combo = comboOf(checked ? streak : 0); if (combo > bestCombo) bestCombo = combo;
     const raw = parts.reduce((a, p) => a + p[1], 0), dayXP = Math.round(raw * combo);
@@ -1355,6 +1357,81 @@ function buildPlan() {
 }
 const buildName = i => { const it = buildPlan()[i]; return it ? BUILD_NAMES[it.kind] : null; };
 
+/* ---- Les petites animations du fond : ciel, vallée, rue, ambiance de l'heure. Discrètes ; coupées sur téléphone
+   et si l'appareil demande moins d'animations. Le moulin et la barque restent dessinés, immobiles. ---- */
+const VFX = {smoke: [], mill: null, lake: null};
+const AMB = {mqPhone: matchMedia('(max-width:640px)'), mqCalm: matchMedia('(prefers-reduced-motion: reduce)'), pig: null, flies: null, motes: null, leaves: null};
+const ambOn = () => !AMB.mqPhone.matches && !AMB.mqCalm.matches;
+const hash = n => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+function ambSky(g, L, z, cam, t) { // nuages légers, oiseaux, dirigeable, étoiles filantes
+  const W = g.canvas.width / z, F = (x, y, w, h) => g.fillRect(Math.round(x * z), Math.round(y * z), Math.max(1, Math.round(w * z)), Math.max(1, Math.round(h * z))), wet = L.weather === 'rain' || L.weather === 'storm';
+  const col = L.tod === 'day' ? 'rgba(255,255,255,.55)' : L.tod === 'evening' ? 'rgba(244,170,170,.45)' : 'rgba(90,96,150,.45)';
+  g.fillStyle = col;
+  for (let k = 0; k < 4; k++) { const sp = 1.5 + k * .7, len = 26 + k * 9, x = ((hash(k) * 600 + t * sp) % (W + 120)) - 60, y = 6 + k * 8 + hash(k + 9) * 6; F(x, y, len, 1); F(x + 6, y - 1, len - 14, 1); F(x + 10, y + 1, len - 6, 1); }
+  if (L.tod !== 'night' && !wet) { // une volée d'oiseaux toutes les 25 secondes
+    const cyc = 25, ph = (t % cyc) / 9, n = Math.floor(t / cyc);
+    if (ph < 1) { const x0 = -20 + ph * (W + 40), y0 = 14 + hash(n) * 22; g.fillStyle = L.tod === 'day' ? '#3a3448' : '#2a1e2e';
+      for (let b = 0; b < 3; b++) { const bx = x0 - b * 7, by = y0 + (b % 2) * 4 + Math.sin(t * 2 + b) * 1.5, up = Math.floor(t * 6 + b) % 2; F(bx, by, 1, 1); F(bx - 2, by - (up ? 1 : 0), 2, 1); F(bx + 1, by - (up ? 1 : 0), 2, 1); } }
+    const bc = 140, bp = (t % bc) / 70; // le dirigeable d'Ama, de temps en temps
+    if (bp < 1) { const bx = W + 30 - bp * (W + 70), by = 22 + hash(Math.floor(t / bc) + 3) * 10;
+      g.fillStyle = '#c8b8a8'; F(bx, by, 16, 5); F(bx + 2, by - 1, 12, 7); g.fillStyle = '#e5484d'; F(bx + 2, by + 2, 12, 1); g.fillStyle = '#8a6a5a'; F(bx + 6, by + 7, 5, 2); F(bx + 16, by + 1, 3, 3); }
+  }
+  if (L.tod === 'night') { const sc = 9, sp = (t % sc) / .7, n = Math.floor(t / sc); // une étoile filante toutes les 9 secondes
+    if (sp < 1) { const x0 = 40 + hash(n + 1) * (W - 80), y0 = 4 + hash(n + 2) * 18; for (let i = 0; i < 10; i++) { g.fillStyle = `rgba(255,255,240,${(1 - i / 10) * (1 - sp)})`; F(x0 + sp * 30 - i * 1.5, y0 + sp * 12 - i * .6, 1, 1); } } }
+}
+function ambValley(g, L, z, cam, t, on) { // fumée des cheminées, ailes du moulin, reflets de l'eau, barque
+  const ox = cam * PAR.valley, X = x => (x - ox) * z, W = g.canvas.width;
+  if (VFX.mill) { const [hx, hy, len, wood, sail] = VFX.mill, a0 = on ? t * .7 : Math.PI / 4; g.save(); g.lineCap = 'butt';
+    for (let k = 0; k < 4; k++) { const a = a0 + k * Math.PI / 2, ex = hx + Math.cos(a) * len, ey = hy + Math.sin(a) * len;
+      g.strokeStyle = wood; g.lineWidth = Math.max(1, z * .6); g.beginPath(); g.moveTo(X(hx), hy * z); g.lineTo(X(ex), ey * z); g.stroke();
+      g.strokeStyle = sail; g.lineWidth = Math.max(1, z * 1.4); g.beginPath(); g.moveTo(X(hx + Math.cos(a) * len * .3 + Math.cos(a + 1.57) * 1.2), (hy + Math.sin(a) * len * .3 + Math.sin(a + 1.57) * 1.2) * z); g.lineTo(X(ex + Math.cos(a + 1.57) * 1.2), (ey + Math.sin(a + 1.57) * 1.2) * z); g.stroke(); }
+    g.fillStyle = wood; g.fillRect(X(hx) - z, (hy - 1) * z, 2 * z, 2 * z); g.restore(); }
+  if (VFX.lake) { const [lx, ly, rx, ry, s] = VFX.lake, a = on ? t * .12 : 1, bx = lx + Math.cos(a) * rx * .55, by = ly + Math.sin(a) * ry * .4 - 1;
+    g.fillStyle = '#8a5a3a'; g.fillRect(X(bx), by * z, Math.max(2, 4 * s) * z, z); g.fillStyle = '#e8e0d0'; g.fillRect(X(bx + s), (by - 2) * z, z, 2 * z); }
+  if (!on) return;
+  g.save(); g.globalCompositeOperation = 'lighter'; // l'eau scintille
+  for (let i = 0; i < 18; i++) { const p = .2 + hash(i) * .8, tw = Math.sin(t * 2.2 + i * 1.7); if (tw < .55) continue; const x = X(riverX(p) + (hash(i + 40) - .5) * riverW(p) * .6); if (x < 0 || x > W) continue;
+    g.fillStyle = `rgba(255,255,255,${(tw - .55) * 1.6})`; g.fillRect(x, vy(p) * z, Math.max(1, z * (p > .6 ? 2 : 1)), Math.max(1, z * .7)); }
+  if (VFX.lake) { const [lx, ly, rx, ry] = VFX.lake; for (let i = 0; i < 8; i++) { const tw = Math.sin(t * 1.8 + i * 2.3); if (tw < .5) continue; g.fillStyle = `rgba(255,255,255,${(tw - .5) * 1.4})`; g.fillRect(X(lx + (hash(i + 70) - .5) * rx * 1.4), (ly + (hash(i + 80) - .5) * ry) * z, 2 * z, Math.max(1, z * .6)); } }
+  g.restore();
+  // la fumée des cheminées, poussée par le vent
+  const smoke = L.tod === 'night' ? '150,150,180' : '235,230,235';
+  VFX.smoke.forEach(([cx, cy, s, p], i) => { if (i % 2) return; const sx = X(cx); if (sx < -20 * z || sx > W + 20 * z) return;
+    for (let k = 0; k < 4; k++) { const ph = (t * .25 + k / 4 + hash(i)) % 1; g.fillStyle = `rgba(${smoke},${.35 * (1 - ph) * (.4 + p * .6)})`; g.beginPath(); g.arc(X(cx + ph * 6 * s + Math.sin(ph * 6 + i) * s), (cy - ph * 10 * s) * z, (.6 + ph * 2.2) * s * z, 0, 7); g.fill(); } });
+}
+function ambStreet(g, L, z, cam, t, hour) { // lanternes, chat, pigeons
+  const X = x => Math.round((x - cam) * z), F = (x, y, w, h) => g.fillRect(X(x), Math.round(y * z), Math.max(1, Math.round(w * z)), Math.max(1, Math.round(h * z))), W = g.canvas.width;
+  // la flamme des lanternes vacille
+  for (const [a, b] of OPENINGS) for (const lx of [a + 2, b - 4]) { if (X(lx) < -20 * z || X(lx) > W + 20 * z) continue; const fl = .5 + .5 * Math.sin(t * 9 + lx) * Math.sin(t * 5.3 + lx * 2);
+    g.fillStyle = `rgba(255,244,190,${.45 + fl * .5})`; F(lx, STREET - 32 + (fl > .7 ? 0 : 1), 2, 2 + (fl > .5 ? 1 : 0));
+    if (L.tod !== 'day') { g.save(); g.globalCompositeOperation = 'lighter'; const gr = g.createRadialGradient(X(lx + 1), (STREET - 30) * z, 0, X(lx + 1), (STREET - 30) * z, (12 + fl * 4) * z); gr.addColorStop(0, `rgba(255,200,120,${.10 + fl * .06})`); gr.addColorStop(1, 'rgba(255,200,120,0)'); g.fillStyle = gr; g.fillRect(X(lx - 16), (STREET - 48) * z, 34 * z, 36 * z); g.restore(); } }
+  // le chat sur la balustrade : il remue la queue et cligne des yeux
+  const cx = 300, cy = TERRACE - 2; if (X(cx) > -20 * z && X(cx) < W + 20 * z) { const fur = L.tod === 'night' ? '#1a1420' : '#2e2632', tail = Math.floor(t * 1.5) % 4;
+    g.fillStyle = fur; F(cx, cy - 5, 5, 4); F(cx + 1, cy - 8, 4, 3); F(cx + 1, cy - 9, 1, 1); F(cx + 4, cy - 9, 1, 1); F(cx - 1, cy - 2, 1, 1);
+    F(cx - 2 - (tail === 1 ? 1 : 0), cy - 4 - (tail >= 2 ? 1 : 0), 2, 1); F(cx - 3 - (tail === 1 ? 1 : 0), cy - 6 + (tail === 3 ? 1 : 0), 1, 2);
+    if ((t % 5) > .15) { g.fillStyle = L.tod === 'day' ? '#c8e070' : '#e8ff80'; F(cx + 2, cy - 7, 1, 1); F(cx + 4, cy - 7, 1, 1); } }
+  // les pigeons picorent, s'envolent et reviennent
+  if (!AMB.pig) AMB.pig = [150, 440, 690, 860].map((x, i) => ({x, i}));
+  if (L.weather !== 'storm') for (const p of AMB.pig) { const cyc = 22 + p.i * 3, ph = (t + p.i * 7) % cyc; let px = p.x, py = STREET - 3, fly = false;
+    if (ph > cyc - 4) { const f = (ph - (cyc - 4)) / 4; fly = true; px += f * 60; py -= f * 40 + Math.sin(f * 3) * 4; } else if (ph < 1.2) { const f = 1 - ph / 1.2; fly = true; px -= f * 40; py -= f * 30; }
+    if (X(px) < -10 * z || X(px) > W + 10 * z) continue;
+    const peck = !fly && Math.floor(t * 3 + p.i) % 5 === 0;
+    g.fillStyle = '#8c8a9c'; F(px, py, 4, 2); g.fillStyle = '#6a7488'; F(px + (peck ? 4 : 3), py - (peck ? -1 : 1), 2, 2); g.fillStyle = '#e8a050'; F(px + (peck ? 6 : 5), py + (peck ? 1 : 0), 1, 1);
+    if (fly) { g.fillStyle = '#a8a6b8'; const up = Math.floor(t * 12) % 2; F(px + 1, py - (up ? 2 : -1), 2, 1); } }
+}
+function ambAir(g, L, z, cam, t, hour) { // feuilles et pétales au vent, brume du matin, poussière dorée du soir, lucioles la nuit
+  const W = g.canvas.width / z, F = (x, y, w, h) => g.fillRect(Math.round(x * z), Math.round(y * z), Math.max(1, Math.round(w * z)), Math.max(1, Math.round(h * z))), wet = L.weather === 'rain' || L.weather === 'storm';
+  if (L.tod !== 'night' && !wet) for (let i = 0; i < 7; i++) { const sp = 10 + hash(i) * 8, x = ((hash(i + 3) * 900 + t * sp) % (W + 40)) - 20, y = 40 + hash(i + 5) * 100 + Math.sin(t * 1.3 + i) * 6 + ((t * 4 + i * 30) % 30);
+    g.fillStyle = i % 3 ? 'rgba(244,160,184,.8)' : 'rgba(200,160,80,.8)'; const fl = Math.floor(t * 4 + i) % 2; F(x, y, fl ? 2 : 1, fl ? 1 : 2); }
+  if (hour >= 6 && hour < 10 && !wet) { // la brume du matin se lève sur la vallée
+    for (let k = 0; k < 3; k++) { const y = HZ + 10 + k * 14 - ((t * 1.2 + k * 8) % 24), a = .07 + .03 * Math.sin(t * .4 + k); const gr = g.createLinearGradient(0, (y - 5) * z, 0, (y + 5) * z); gr.addColorStop(0, 'rgba(240,236,248,0)'); gr.addColorStop(.5, `rgba(240,236,248,${a})`); gr.addColorStop(1, 'rgba(240,236,248,0)'); g.fillStyle = gr; g.fillRect(0, (y - 5) * z, W * z, 10 * z); } }
+  g.save(); g.globalCompositeOperation = 'lighter';
+  if (hour >= 17 && hour < 21 && !wet) for (let i = 0; i < 16; i++) { const x = (hash(i) * W + Math.sin(t * .3 + i) * 20 + t * 2) % W, y = 30 + hash(i + 11) * 110 + Math.sin(t * .5 + i * 2) * 8, tw = .5 + .5 * Math.sin(t * 1.4 + i);
+    g.fillStyle = `rgba(255,214,140,${.25 + tw * .35})`; F(x, y, 1, 1); }
+  if (L.tod === 'night') for (let i = 0; i < 14; i++) { const wx = hash(i) * FW + Math.sin(t * .4 + i * 2) * 12, x = wx - cam, y = STREET - 8 - hash(i + 20) * 45 + Math.sin(t * .7 + i) * 6, pul = .5 + .5 * Math.sin(t * 2.4 + i * 1.3);
+    if (x < -10 || x > W + 10 || pul < .2) continue; const gr = g.createRadialGradient(x * z, y * z, 0, x * z, y * z, 5 * z); gr.addColorStop(0, `rgba(200,255,120,${.5 * pul})`); gr.addColorStop(1, 'rgba(200,255,120,0)'); g.fillStyle = gr; g.fillRect((x - 5) * z, (y - 5) * z, 10 * z, 10 * z); g.fillStyle = `rgba(240,255,190,${pul})`; F(x, y, 1, 1); }
+  g.restore();
+}
 function valleyLayer(n, chantier, tod) {
   const {W, cx, hz, bottom} = VALLEY, [c, g] = mkc(W, SH), r = rng(17), VW = [];
   const pal = tod === 'day' ? {far: '#a4b484', near: '#5e8a46', field: '#7a9a50', hay: '#c8b46a', water: '#78b4e0', waterLo: '#4a88c0', tree: '#3e7a34', treeHi: '#5e9a44', treeLo: '#2a5424', hill: '#7a9a74'}
@@ -1371,6 +1448,7 @@ function valleyLayer(n, chantier, tod) {
     R(g, x - w / 2, y, w, 1, mix(pal.water, pal.waterLo, p)); if (r() < .35) R(g, x - w / 3 + r() * w * .6, y, Math.max(1, Math.round(w / 6)), 1, mix(pal.water, '#ffffff', .4));
   }
   // ce qui a été bâti, du plus loin au plus près, puis le chantier du jour
+  VFX.smoke = []; VFX.mill = null; VFX.lake = null;
   const plan = buildPlan(), built = plan.slice(0, n).map((it, i) => ({...it, i})).sort((a, b) => a.p - b.p);
   const D = (it, ghost) => drawBuild(g, it, pal, VW, ghost);
   for (const it of built.filter(it => it.kind === 'lake' || it.kind === 'pave' || it.kind === 'square' || it.kind === 'garden')) D(it);
@@ -1404,21 +1482,21 @@ function drawBuild(g, it, pal, VW, ghost) {
       g.fillStyle = pal.waterLo; g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, 7); g.fill(); g.fillStyle = pal.water; g.beginPath(); g.ellipse(x, y - 1, rx * .8, ry * .6, 0, 0, 7); g.fill();
       for (let i = 0; i < 10; i++) R(g, x - rx * .6 + r() * rx * 1.2, y - ry * .5 + r() * ry, S1(4), 1, mix(pal.water, '#ffffff', .45));
       for (let i = 0; i < 12; i++) { const a = r() * Math.PI * 2; R(g, x + Math.cos(a) * (rx + 1), y + Math.sin(a) * (ry + 1) - 3, 1, 3, haze('#4e7a3a')); }
-      R(g, x + rx * .3, y - 2, S1(4), 1, '#8a5a3a'); R(g, x + rx * .3 + S1(1), y - 4, 1, 2, '#e8e0d0'); return; }
+      VFX.lake = [x, y, rx, ry, s]; return; } // la barque glisse sur le lac dans la scène
     case 'tree': { const kind = r(); if (kind < .3) { const h = S1(10), w = S1(3); R(g, x, y - S1(2), 1, S1(2), haze('#5a3e2a')); for (let i = 0; i < h; i++) { const ww = Math.max(1, Math.round(w * Math.sin(Math.PI * (i + 1) / (h + 1)))); R(g, x - Math.floor(ww / 2), y - S1(2) - h + i, ww + 1, 1, i < h / 3 ? haze(pal.treeHi) : haze(pal.tree)); } return; }
       const rad = Math.max(1.5, 3.6 * s); R(g, x, y - S1(3), Math.max(1, Math.round(s)), S1(3), haze('#5a3e2a'));
       g.fillStyle = haze(pal.treeLo); g.beginPath(); g.arc(x + .5, y - S1(3) - rad + 1, rad, 0, 7); g.fill(); g.fillStyle = haze(pal.tree); g.beginPath(); g.arc(x, y - S1(3) - rad, rad * .85, 0, 7); g.fill();
       if (s > .6) { P1(g, x - 1, y - S1(3) - rad - 1, haze(pal.treeHi)); P1(g, x + 1, y - S1(3) - rad * 1.4, haze(pal.treeHi)); } return; }
     case 'house': { const bw = S1(7 + r() * 4), bh = S1(6 + r() * 4), rh = S1(4), wall = haze(walls[Math.floor(r() * walls.length)]), rc = haze(roofs[Math.floor(r() * roofs.length)], .8);
       R(g, x - bw / 2, y - bh, bw, bh, wall); R(g, x + bw / 2 - S1(1), y - bh, S1(1), bh, mix(wall, '#000000', .18)); roof(x - bw / 2, y - bh, bw, rh, rc);
-      if (s > .55) { if (r() < .6) R(g, x - bw / 2 + Math.round(bw * (.2 + r() * .5)), y - bh - rh - S1(2), S1(1), S1(2), haze('#8a6a5a'));
+      if (s > .55) { if (r() < .6) { const chx = x - bw / 2 + Math.round(bw * (.2 + r() * .5)), chy = y - bh - rh - S1(2); R(g, chx, chy, S1(1), S1(2), haze('#8a6a5a')); VFX.smoke.push([chx, chy, s, it.p]); }
         const cols = Math.max(1, Math.floor(bw / (3 * s))), rows = Math.max(1, Math.floor(bh / (3.2 * s)));
         for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) win(Math.round(x - bw / 2 + 1 + i * bw / cols), Math.round(y - bh + 1 + j * bh / rows), Math.max(1, Math.round(s * .9)), S1(1.2), r() < .35);
         R(g, x - S1(1), y - S1(2.5), S1(2), S1(2.5), haze('#5a3a2a')); } else if (r() < .5) win(Math.round(x - bw / 2 + r() * bw), Math.round(y - bh + r() * bh * .6), 1, 1, true);
       return; }
     case 'well': { R(g, x - S1(3), y - S1(3), S1(6), S1(3), haze('#a89890')); R(g, x - S1(3), y - S1(3), S1(6), 1, haze('#d8ccc4')); R(g, x - S1(3), y - S1(8), 1, S1(5), haze('#6a4a32')); R(g, x + S1(3) - 1, y - S1(8), 1, S1(5), haze('#6a4a32')); roof(x - S1(4), y - S1(8), S1(8), S1(2), haze('#a04c40')); R(g, x, y - S1(7), 1, S1(3), '#8a8a8a'); return; }
     case 'mill': { const h = S1(16), w = S1(7); for (let i = 0; i < h; i++) { const ww = Math.round(w - i * .18 * s); R(g, x - ww / 2, y - i - 1, ww, 1, haze(i % 6 === 0 ? '#d8ccc0' : '#ece0d0')); } roof(x - S1(3), y - h, S1(6), S1(3), haze('#8a4a3a'));
-      const hx = x, hy = y - h + S1(2), L2 = S1(10); for (let k = -L2; k <= L2; k++) { P1(g, hx + k, hy + k, haze('#6a4a32')); P1(g, hx + k, hy - k, haze('#6a4a32')); } for (let k = 2; k < L2; k += 2) { P1(g, hx + k + 1, hy + k, haze('#e8dccc')); P1(g, hx - k - 1, hy - k, haze('#e8dccc')); P1(g, hx + k + 1, hy - k, haze('#e8dccc')); P1(g, hx - k - 1, hy + k, haze('#e8dccc')); }
+      VFX.mill = [x, y - h + S1(2), S1(10), haze('#6a4a32'), haze('#e8dccc')]; // les ailes tournent dans la scène
       win(x - S1(1), y - S1(6), S1(2), S1(3), true); return; }
     case 'church': { const wall = haze('#e8dcc8'); R(g, x - S1(10), y - S1(8), S1(16), S1(8), wall); roof(x - S1(10), y - S1(8), S1(16), S1(4), haze('#a04c40'));
       R(g, x + S1(6), y - S1(18), S1(5), S1(18), haze('#ece2d0')); R(g, x + S1(10), y - S1(18), S1(1), S1(18), haze('#c8b8a4')); for (let i = 0; i < S1(9); i++) R(g, x + S1(6) + Math.round(i * .28), y - S1(18) - i, Math.max(1, S1(5) - Math.round(i * .56)), 1, haze('#5a4a5a'));
@@ -1641,6 +1719,8 @@ function drawScene(now) {
     const sun = g.createRadialGradient(sx, sy, 0, sx, sy, 34 * z); sun.addColorStop(0, 'rgba(255,214,160,.3)'); sun.addColorStop(1, 'rgba(255,140,120,0)'); g.fillStyle = sun; g.fillRect(0, 0, cv.width, cv.height);
     g.restore();
   }
+  const amb = ambOn(), hour = new Date().getHours();
+  if (amb) ambSky(g, L, z, cam, t);
   // la vallée : un seul plan, un peu plus flou au loin
   g.save(); g.beginPath(); g.rect(0, 0, cv.width, (HZ + 20) * z); g.clip(); g.filter = `blur(${Math.max(.5, z * .35)}px)`; blit(L.valley, PAR.valley); g.restore();
   g.save(); g.beginPath(); g.rect(0, (HZ + 20) * z, cv.width, cv.height); g.clip(); g.filter = `blur(${Math.max(.3, z * .14)}px)`; blit(L.valley, PAR.valley); g.restore();
@@ -1649,7 +1729,9 @@ function drawScene(now) {
   const mist = g.createLinearGradient(0, (STREET - 60) * z, 0, STREET * z); mist.addColorStop(0, `rgba(${hr},${hg},${hb},0)`); mist.addColorStop(1, `rgba(${hr},${hg},${hb},.3)`); g.fillStyle = mist; g.fillRect(0, 0, cv.width, cv.height);
   // la lueur de la ville en contrebas
   { g.save(); g.globalCompositeOperation = 'lighter'; const vx = (VALLEY.cx - cam * PAR.valley) * z, vy = (STREET - 40) * z, gl = g.createRadialGradient(vx, vy, 0, vx, vy, 160 * z); gl.addColorStop(0, `rgba(255,170,100,${L.tod === 'day' ? .04 : .1})`); gl.addColorStop(1, 'rgba(255,170,100,0)'); g.fillStyle = gl; g.fillRect(0, 0, cv.width, cv.height); g.restore(); }
+  ambValley(g, L, z, cam, t, amb);
   blit(L.front, 1);
+  if (amb) ambStreet(g, L, z, cam, t, hour);
   // le labo fume, et sa bobine crépite de temps en temps
   if (LAB_FX.chimney) {
     const [cx0, cy0] = LAB_FX.chimney; g.save();
@@ -1673,6 +1755,7 @@ function drawScene(now) {
   if (L.tod !== 'night') { g.save(); g.globalCompositeOperation = 'soft-light'; const k = L.tod === 'evening' ? 1 : .45, warm = g.createLinearGradient(cv.width, 0, 0, 0); warm.addColorStop(0, `rgba(255,150,110,${.32 * k})`); warm.addColorStop(1, `rgba(90,60,160,${.3 * k})`); g.fillStyle = warm; g.fillRect(0, 0, cv.width, cv.height); g.restore(); }
   g.fillStyle = T.ambient; g.fillRect(0, 0, cv.width, cv.height);
   g.save(); g.globalCompositeOperation = 'lighter'; g.drawImage(L.glow, -Math.round(cam * z), 0, FW * z, SH * z); g.restore();
+  if (amb) ambAir(g, L, z, cam, t, hour);
   // météo : pluie, éclairs
   if (SCENE.rain.length) { g.strokeStyle = 'rgba(200,210,240,.45)'; g.lineWidth = Math.max(1, z * .5); g.beginPath(); for (const p of SCENE.rain) { g.moveTo(p.x * z, p.y * z); g.lineTo((p.x - 1.5) * z, (p.y + 6) * z); } g.stroke(); }
   if (L.weather === 'storm' && (t % 7) < .12) { g.fillStyle = 'rgba(255,255,255,.35)'; g.fillRect(0, 0, cv.width, cv.height); }
@@ -1714,7 +1797,7 @@ const SUBMENUS = {
   market:   [['add', 'Noter'], ['income', 'Rentrée'], ['refund', 'Rembours.'], ['zero', 'Jour zéro'], ['recent', 'Récentes'], ['back', 'Retour']],
   bank:     [['bilan', 'Bilan'], ['cash', 'Trésorerie'], ['cats', 'Catégories'], ['daily', 'Par jour'], ['top', 'Top'], ['back', 'Retour']],
   archives: [['cal', 'Calendrier'], ['list', 'Liste'], ['back', 'Retour']],
-  board:    [['today', 'Du jour'], ['week', 'Semaine'], ['progress', 'Progrès'], ['trophies', 'Trophées'], ['newq', '+ Quête'], ['back', 'Retour']],
+  board:    [['today', 'Du jour'], ['week', 'Semaine'], ['progress', 'Progrès'], ['trophies', 'Trophées'], ['newq', '+ Quête'], ['manage', 'Gérer'], ['back', 'Retour']],
   lab:      [['measures', 'Mesures'], ['newt', '+ Suivi'], ['back', 'Retour']],
   home:     [['hero', 'Héros'], ['char', 'Personnage'], ['look', 'Apparence'], ['skins', 'Tenues'], ['budgets', 'Budgets'], ['cats', 'Catégories'], ['save', 'Sauvegarde'], ['rules', 'Règles'], ['back', 'Retour']],
   belvedere:[['wishes', 'Envies'], ['newwish', '+ Envie'], ['forecast', 'Prévisions'], ['tip', 'Un conseil'], ['back', 'Retour']],
@@ -1802,7 +1885,7 @@ function panelHTML(g) {
   if (p === 'market') return s === 'recent' ? recentPanel() : s === 'zero' ? zeroPanel() : s === 'income' ? incomePanel() : s === 'refund' ? refundPanel(g) : addPanel();
   if (p === 'bank') return s === 'cash' ? cashPanel(g) : bankPanel(s || 'bilan');
   if (p === 'archives') return s === 'list' ? listPanel() : calPanel();
-  if (p === 'board') return s === 'week' ? weekPanel() : s === 'trophies' ? trophyPanel(g) : s === 'progress' ? progressPanel(g) : s === 'newq' ? newQuestPanel() : todayQuests();
+  if (p === 'board') return s === 'week' ? weekPanel() : s === 'trophies' ? trophyPanel(g) : s === 'progress' ? progressPanel(g) : s === 'newq' ? newQuestPanel() : s === 'manage' ? manageQuestsPanel() : todayQuests();
   if (p === 'lab') return s === 'newt' ? newTrackerPanel() : measuresPanel();
   if (p === 'home') return homePanel(s || 'hero', g);
   if (p === 'belvedere') { if (s === 'wishes' || !s) return wishesPanel(g); if (s === 'newwish') return wishForm(); if (s === 'forecast') return forecastPanel(g); const nx = buildName(g.buildDays); return `<p>${esc(TIPS[UI.tipIdx % TIPS.length])}</p><p class="dim">La ville en contrebas compte ${g.buildDays} construction${g.buildDays > 1 ? 's' : ''}.${nx ? ` Prochaine : ${esc(nx)}${g.buildToday ? ' (en chantier aujourd\'hui)' : ''}.` : ' Le royaume est achevé.'}</p>`; }
@@ -1909,7 +1992,10 @@ function calPanel() {
 function listPanel() { const ex = S.expenses.filter(e => ymOf(e.date) === UI.viewYM).sort((a, b) => b.date.localeCompare(a.date)); return monthBar(UI.viewYM) + (ex.length ? `<div class="list">${ex.map(expenseRow).join('')}</div>` : '<p class="dim">Aucune dépense ce mois-ci.</p>'); }
 function todayQuests() {
   const t = today();
-  return S.habits.length ? `<div class="list">${S.habits.map(h => { const on = habitDone(t, h.id); return `<div class="li"><button class="box ${on ? 'on' : ''}" data-act="habit" data-id="${h.id}" data-date="${t}" aria-label="Accomplir">${on ? '✓' : ''}</button><span class="grow">${esc(h.name)}</span><small class="dim">série ${habitStreak(h.id)}</small><button class="x" data-act="delHabit" data-id="${h.id}" aria-label="Supprimer">×</button></div>`; }).join('')}</div><p class="dim">+15 XP par quête. Toutes accomplies : +20 XP.</p>` : '<p class="dim">Aucune quête. Choisis « Nouvelle quête ».</p>';
+  return S.habits.length ? `<div class="list">${S.habits.map(h => { const on = habitDone(t, h.id); return `<div class="li"><button class="box ${on ? 'on' : ''}" data-act="habit" data-id="${h.id}" data-date="${t}" aria-label="Accomplir">${on ? '✓' : ''}</button><span class="grow">${esc(h.name)}</span><small class="dim">série ${habitStreak(h.id)}</small><button class="x" data-act="delHabit" data-id="${h.id}" aria-label="Supprimer la quête" title="Supprimer la quête">×</button></div>`; }).join('')}</div><p class="dim">+15 XP par quête, +25 si toutes sont faites. Quêtes › Gérer pour renommer ou supprimer.</p>` : '<p class="dim">Aucune quête. Choisis « Nouvelle quête ».</p>';
+}
+function manageQuestsPanel() { // renommer ou supprimer ses quêtes
+  return S.habits.length ? `<p class="dim">Renomme une quête en touchant son nom. Supprimer la retire des listes ; l'XP qu'elle t'a déjà rapportée reste acquise.</p><div class="list">${S.habits.map(h => `<div class="li"><input class="grow" value="${esc(h.name)}" maxlength="50" data-chg="habitName" data-id="${h.id}" aria-label="Nom de la quête"><button class="ffbtn sm red" data-act="delHabit" data-id="${h.id}">Supprimer</button></div>`).join('')}</div>` : '<p class="dim">Aucune quête. Choisis « + Quête » pour en créer une.</p>';
 }
 function weekPanel() {
   const t = today(), days = Array.from({length: 7}, (_, i) => addDays(t, i - 6));
@@ -2113,7 +2199,7 @@ const ACT = {
   pickcat: a => { UI.pickCat = a.dataset.id; document.querySelectorAll('#panel .cat').forEach(b => b.classList.toggle('on', b.dataset.id === UI.pickCat)); SFX.click(); },
   zero: () => { const t = today(); if (S.checkins[t]) delete S.checkins[t]; else S.checkins[t] = true; SFX.quest(); commit('Journée sans dépense : la cité respire.'); },
   habit: a => { const {id, date} = a.dataset; S.habitLog[date] = S.habitLog[date] || {}; if (S.habitLog[date][id]) delete S.habitLog[date][id]; else S.habitLog[date][id] = true; const all = S.habits.every(h => habitDone(today(), h.id)); if (habitDone(date, id)) (all && date === today() ? fanfare : SFX.quest)(); commit(all ? 'Toutes les quêtes du jour : bravo !' : 'Quête accomplie.'); },
-  delHabit: a => { const h = S.habits.find(x => x.id === a.dataset.id); if (h && confirm(`Supprimer la quête « ${h.name} » ?`)) { S.habits = S.habits.filter(x => x !== h); commit(); } },
+  delHabit: a => { const h = S.habits.find(x => x.id === a.dataset.id); if (h && confirm(`Supprimer la quête « ${h.name} » ? L'XP qu'elle t'a déjà rapportée reste acquise.`)) { S.habits = S.habits.filter(x => x !== h); S.oldHabits.push({...h, removed: today()}); SFX.click(); toast('Quête supprimée', h.name); commit(); } },
   delTracker: a => { const tr = S.trackers.find(x => x.id === a.dataset.id); if (tr && confirm(`Supprimer le suivi « ${tr.name} » ?`)) { S.trackers = S.trackers.filter(x => x !== tr); commit(); } },
   day: a => { UI.selDay = a.dataset.d; SFX.click(); renderUI(); },
   edit: a => editExpense(a.dataset.id),
@@ -2168,6 +2254,7 @@ document.addEventListener('change', e => {
   const t = e.target, k = t.dataset.chg, c = t.dataset.id && catOf(t.dataset.id);
   if (t.id === 'importFile') { const f = t.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { const d = JSON.parse(r.result); if (!d || !Array.isArray(d.expenses) || !Array.isArray(d.categories)) throw 0; if (!confirm(`Importer ${d.expenses.length} dépenses ? Les données actuelles seront remplacées.`)) return; S = migrate(d); save(true); renderUI(); toast('Import réussi', `${S.expenses.length} dépenses chargées.`); } catch (err) { alert("Ce fichier n'est pas une sauvegarde Budget Quest."); } }; r.readAsText(f); t.value = ''; return; }
   if (k === 'heroName') { S.heroName = t.value.trim().slice(0, 20); commit(); }
+  else if (k === 'habitName') { const h = S.habits.find(x => x.id === t.dataset.id); if (h && t.value.trim()) { h.name = t.value.trim().slice(0, 50); commit(); } }
   else if (k === 'catName' && c) { if (t.value.trim()) c.name = t.value.trim().slice(0, 24); commit(); }
   else if (k === 'trackerDate') { UI.trackerDate = t.value && t.value <= today() ? t.value : today(); renderUI(); }
 });
