@@ -112,6 +112,8 @@ Entre ces étapes : des maisons, des arbres, des chemins et des potagers. La vil
 
 ## Les menus, comme dans Final Fantasy
 
+**Sur téléphone**, l'affichage est épuré : plein écran, sans moniteur ni bureau, la scène en bandeau, le menu en onglets à faire défiler (« ◂ Retour » toujours en premier), l'écran du lieu en entier et une barre d'état réduite à la trésorerie, au niveau et à la série. Les répliques des robots ne s'y affichent pas.
+
 Tout passe par les fenêtres bleues du bas : on choisit avec la main, au doigt, à la souris ou au clavier (↑ ↓, Entrée, Échap).
 
 | Menu | Lieu | Robot | Ce qu'on y fait |
@@ -122,6 +124,7 @@ Tout passe par les fenêtres bleues du bas : on choisit avec la main, au doigt, 
 | **Quêtes** | Le Tableau des quêtes | Rook | Habitudes du jour, semaine, **progression**, trophées, nouvelle quête |
 | **Suivis** | Le Labo | Boulon | Compteurs personnalisés avec un objectif « au moins » ou « au plus » |
 | **Trésorerie** | La Banque | Hares | Le solde d'aujourd'hui et son calcul (départ, rentrées, dépenses, remboursements), ce qui reste dû, le départ à modifier |
+| **🎁 (en haut à droite)** | Le Belvédère | Merlain | La wishlist (envies et projets), les prévisions sur 12 mois, un conseil |
 | **⚙ (en haut à droite de l'écran)** | La maison du héros | — | La configuration : héros, personnage, apparence, tenues, budgets, catégories, sauvegarde, règles |
 | — | Le Belvédère (à toucher dans la scène) | Merlain | Des conseils, et la prochaine construction de la vallée |
 
@@ -134,6 +137,20 @@ La barre d'état montre la trésorerie, les PV, le niveau avec sa jauge d'XP et 
 **Trésorerie = trésorerie de départ + rentrées − dépenses ± remboursements**, comptées depuis la date de départ.
 Trésorerie montre le détail, les dernières rentrées, et ce qui restera à la fin du mois si le budget est tenu.
 
+
+## La wishlist et les prévisions (bouton 🎁)
+
+Le bouton **🎁**, à côté de ⚙ en haut à droite, ouvre le Belvédère : la longue-vue de Merlain regarde l'avenir.
+
+**Envies** : chaque envie (ou projet) a un nom, un prix estimé, **la catégorie de budget** où elle tombe et **le mois prévu**.
+- Elle **réserve** son prix dans ce budget, ce mois-là : le budget du jour du mois baisse d'autant, pour que l'argent soit mis de côté au fil des jours.
+- Si elle coûte plus que le budget de sa catégorie, la ligne le signale ; **Ajuster** monte le budget de ce seul mois, juste assez (les autres mois ne changent pas).
+- **Acheté** : l'envie devient une vraie dépense (au prix réellement payé) et sa réservation disparaît. Écarts › Catégories montre les montants réservés.
+
+**Prévisions** : une courbe de la trésorerie sur 12 mois, avec un cadeau sur les mois où tombe une envie.
+- Chaque mois : + le revenu mensuel prévu − les budgets du mois. Une envie plus chère que son budget pèse en plus. Le mois en cours ne compte que ce qui reste à dépenser.
+- Le revenu prévu se règle sur l'écran ; sans réglage, c'est la moyenne des rentrées des trois derniers mois.
+- Si la courbe passe sous zéro, l'écran dit quand et de combien : de quoi repousser une envie, ajuster un budget ou prévoir une rentrée.
 
 ## Les remboursements (hors budget)
 

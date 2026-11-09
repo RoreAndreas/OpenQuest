@@ -47,10 +47,16 @@ button,input,select{font:inherit;color:inherit}
 .view{position:relative;flex:1 1 auto;min-height:170px;background:#000;touch-action:pan-y}
 #scene{width:100%;height:100%;display:block;cursor:grab;touch-action:pan-y}
 #scene:active{cursor:grabbing}
-#dlg{position:absolute;left:8px;right:56px;top:8px;display:flex;gap:10px;align-items:flex-start;padding:8px 10px;cursor:pointer;z-index:2;min-height:64px}
+#dlg{position:absolute;left:8px;right:106px;top:8px;display:flex;gap:10px;align-items:flex-start;padding:8px 10px;cursor:pointer;z-index:2;min-height:64px}
 #dlg[hidden]{display:none}
 .cfgbtn{position:absolute;right:8px;top:8px;z-index:3;width:42px;height:42px;padding:0;display:grid;place-items:center;cursor:pointer}
 .cfgbtn:hover svg{transform:rotate(45deg)}
+.wishbtn{right:58px}.wishbtn:hover svg{transform:translateY(-2px) rotate(-8deg)}
+body.wish .wishbtn{border-color:var(--gold)}
+.gift{flex:none;image-rendering:pixelated;vertical-align:middle}
+.wish-name{background:none;border:0;text-align:left;cursor:pointer;padding:0;text-shadow:inherit;font-size:20px}
+#fchart{width:100%;height:auto;display:block;margin:6px 0}
+.kv.fc{grid-template-columns:1fr auto;font-size:18px}
 .cfgbtn svg{transition:transform .3s;image-rendering:pixelated}
 body.cfg .cfgbtn{border-color:var(--gold)}
 #dlg .face{width:48px;height:48px;flex:none;background:#0a0e3a;border:2px solid #9aa4e0;border-radius:3px}
@@ -160,15 +166,33 @@ canvas.spark{width:100%;height:30px}
 .banner{background:#7a1e2e;color:#fff;padding:6px 10px;font-size:18px;text-align:center}
 /* ---- au téléphone : la scène en haut, les fenêtres dessous ---- */
 @media (max-width:640px){
-  #pc{padding:6px 6px 40px;width:100%;margin:0}
-  .view{flex:none;height:min(calc((100vw - 24px) * .86),46vh)}
-  .ui,body.open .ui{flex:1;height:auto;grid-template-areas:'menu panel' 'status status'}
+  /* Au téléphone, tout est épuré : plein écran, sans moniteur ni bureau ; la scène en bandeau, le menu en onglets, l'écran du lieu en entier */
+  body{background:#0b0910}
+  .room,.chin,.stand,#mugWrap,.hint,#dlg,#tag{display:none!important}
+  #pc{width:100%;margin:0;padding:0;height:100dvh}
+  .bezel{padding:0;border-radius:0;background:none;box-shadow:none}
+  .screen{border-radius:0}
+  .screen::after{display:none}
+  .view{flex:none;height:30vh;min-height:150px}
+  #title{left:6px;top:6px;padding:3px 8px;font-size:8px;display:block!important}
+  .mi.back{order:-1}
+  .mi.back::before{content:'◂ '}
+  .cfgbtn{right:6px;top:6px;width:36px;height:36px}
+  .wishbtn{right:48px}
+  .cfgbtn svg{width:18px;height:18px}
+  .ui,body.open .ui{flex:1;height:auto;display:flex;flex-direction:column;gap:6px;padding:6px;background:#0b0910}
+  #menu{flex:none;flex-direction:row;gap:4px;padding:4px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;border-width:2px}
+  #menu::-webkit-scrollbar{display:none}
+  .mi{flex:none;width:auto;font-size:18px;padding:6px 10px;border-radius:4px;border:2px solid transparent}
+  .mi.sel::before{display:none}
+  .mi.sel,.mi.cur{border-color:var(--gold);color:var(--gold);background:rgba(255,209,102,.1)}
+  #panel{flex:1;min-height:0;padding:10px}
+  #status{flex:none;justify-content:space-between;font-size:16px;gap:2px 10px;padding:5px 10px;border-width:2px}
+  #status>span:nth-child(2){display:none}
+  #status small{display:none}
   #status b{font-size:9px}
-  .bezel{padding:6px 6px 0;border-radius:10px}
-  .view{height:clamp(190px,36vh,330px)}
-  .ui{grid-template-columns:128px 1fr;gap:5px;padding:5px}
+  .xpbar{width:44px}
   .cats{grid-template-columns:1fr 1fr}
-  .cfgbtn{right:5px;top:5px;width:40px;height:40px}
   .cat{font-size:16px}
   .gauge{width:56px}
   .budrow{flex-wrap:wrap;gap:2px 8px}
@@ -177,18 +201,6 @@ canvas.spark{width:100%;height:30px}
   .monthbar span{min-width:0;font-size:9px}
   .toast{padding:5px 10px;font-size:18px}
   .big{font-size:12px}
-  .mi{font-size:18px;padding:4px 2px 4px 22px}
-  .mi.sel::before{width:18px;height:13px;margin-top:-6px}
-  #panel{padding:8px}
-  #dlg{left:5px;right:50px;top:5px;padding:6px 8px;gap:8px;min-height:56px}
-  #dlg .face{width:40px;height:40px}
-  #dlgTxt{font-size:18px}
-  #status{font-size:16px;gap:2px 8px;padding:5px 6px}
-  #mugWrap{width:76px;height:76px;right:-4px;bottom:2px}
-  .steam{display:none}
-  .chin{height:24px}
-  .stand{height:8px}
-  .room::after{height:46px}
 }
 @media (min-width:900px){ .ui{grid-template-columns:220px 1fr} }
 @media (max-width:900px) and (min-width:641px){ #pc{width:100%;margin:0;padding:8px 8px 44px} #mugWrap{right:-6px;width:96px;height:96px} .steam{display:none} }
@@ -236,6 +248,7 @@ canvas.spark{width:100%;height:30px}
         <canvas id="scene" aria-label="La cité suspendue, vue depuis le PC de Roré"></canvas>
         <div id="dlg" class="ff" data-act="dlg" hidden><span id="dlgFace"></span><div class="grow"><div id="dlgWho"></div><div id="dlgTxt"></div></div></div>
         <div id="title" class="ff"></div>
+        <button id="wishBtn" class="ff cfgbtn wishbtn" data-act="goWish" title="Wishlist et prévisions" aria-label="Wishlist et prévisions"><svg viewBox="0 0 8 8" width="22" height="22" shape-rendering="crispEdges" aria-hidden="true"><path fill="#e5484d" d="M1 3h6v5H1z"/><path fill="#ff6b70" d="M0 2h8v2H0z"/><path fill="#ffd166" d="M3 2h2v6H3zM2 0h1v2H2zM5 0h1v2H5z"/></svg></button>
         <button id="cfgBtn" class="ff cfgbtn" data-act="goConfig" title="Configuration" aria-label="Configuration"><svg viewBox="0 0 16 16" width="22" height="22" shape-rendering="crispEdges" aria-hidden="true"><path fill="#e4e4f0" d="M6 1h4v2h2v1h1v2h2v4h-2v2h-1v1h-2v2H6v-2H4v-1H3v-2H1V6h2V4h1V3h2z"/><path fill="#8a94d0" d="M6 6h4v4H6z"/><path fill="#1c2680" d="M7 7h2v2H7z"/></svg></button>
         <div id="tag" class="ff" hidden></div>
         <div class="hint">◀ glisser ▶</div>
@@ -817,6 +830,8 @@ function defaultState() {
   return {
     version: 1, createdAt: today(), heroName: '', sound: true, lastLevel: 1, seenAch: [], lastCat: 'alim',
     startCash: null, startDate: today(), incomes: [], // trésorerie de départ et rentrées d'argent
+    wishes: [],           // la wishlist : { id, name, price, catId, month: 'YYYY-MM', note, bought: null | {date, amount, expId} }
+    expectedIncome: null, // revenu mensuel prévu, pour les prévisions
     refunds: [],          // remboursements, hors budget : { id, dir: 'owed' (on me doit) | 'owe' (je dois), how, who, amount, date, note, pays: [{id, date, amount}] }
     world: defaultWorld(),
     categories: [
@@ -848,7 +863,8 @@ function defaultState() {
 function migrate(s) {
   const d = defaultState();
   for (const k of Object.keys(d)) if (s[k] === undefined) s[k] = d[k];
-  for (const k of ['categories','expenses','habits','trackers','seenAch','incomes','refunds']) if (!Array.isArray(s[k])) s[k] = d[k];
+  for (const k of ['categories','expenses','habits','trackers','seenAch','incomes','refunds','wishes']) if (!Array.isArray(s[k])) s[k] = d[k];
+  if (s.expectedIncome != null && !isFinite(+s.expectedIncome)) s.expectedIncome = null;
   if (s.startCash != null && !isFinite(+s.startCash)) s.startCash = null;
   if (typeof s.startDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s.startDate)) s.startDate = s.createdAt || today();
   for (const k of ['budgets','checkins','habitLog','trackerLog']) if (!s[k] || typeof s[k] !== 'object' || Array.isArray(s[k])) s[k] = {};
@@ -869,6 +885,7 @@ function migrate(s) {
   } else for (const k of Object.keys(DEFAULT_LOOK)) { const v = ol[k]; if (v == null) continue; if ((k === 'eyes' && LOOK_EYES[v]) || (k === 'cape' && LOOK_CAPE[v]) || (k === 'body' && LOOK_BODY[v]) || (ACCS[v] && ACCS[v].slot === k)) nl[k] = v; }
   s.world.look = nl;
   const okDate = d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d), amt = v => Math.max(0, Math.round(+v || 0));
+  s.wishes = s.wishes.filter(w => w && typeof w.name === 'string' && /^\d{4}-\d{2}$/.test(w.month)).map(w => ({...w, price: amt(w.price), bought: w.bought && okDate(w.bought.date) ? {...w.bought, amount: amt(w.bought.amount)} : null}));
   s.refunds = s.refunds.filter(r => r && okDate(r.date) && ['owed', 'owe'].includes(r.dir)).map(r => ({...r, amount: amt(r.amount), how: r.how === 'cash' ? 'cash' : 'paid', pays: (Array.isArray(r.pays) ? r.pays : []).filter(x => x && okDate(x.date)).map(x => ({...x, amount: amt(x.amount)}))}));
   s.incomes = s.incomes.filter(e => e && typeof e.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(e.date)).map(e => ({...e, amount: Math.max(0, Math.round(+e.amount || 0))}));
   s.expenses = s.expenses.filter(e => e && typeof e.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(e.date)).map(e => ({...e, amount: Math.max(0, Math.round(+e.amount || 0))}));
@@ -933,6 +950,25 @@ function getBudget(ym, cat) {
 }
 const totalBudget = ym => S.categories.reduce((a, c) => a + getBudget(ym, c), 0);
 
+// Le revenu mensuel prévu : celui que tu as indiqué, sinon la moyenne des rentrées des trois derniers mois
+function expectedIncome() {
+  if (S.expectedIncome != null) return S.expectedIncome;
+  const ym0 = ymOf(today()), months = [1, 2, 3].map(k => addMonths(ym0, -k));
+  const tot = S.incomes.filter(e => months.includes(ymOf(e.date))).reduce((a, e) => a + e.amount, 0);
+  return Math.round(tot / 3);
+}
+// La trésorerie mois par mois sur un an : + revenu prévu, − budgets (ou les envies, si elles dépassent leur budget)
+function forecast(g) {
+  const ym0 = ymOf(today()), inc = expectedIncome(), rows = []; let bal = g.cash == null ? 0 : g.cash;
+  for (let k = 0; k < 12; k++) {
+    const ym = addMonths(ym0, k), ms = monthStats(ym); let out = 0;
+    for (const c of ms.cats) out += k === 0 ? Math.max(c.budget - c.spent, c.reserved, 0) : Math.max(c.budget, c.reserved);
+    const got = k === 0 ? S.incomes.filter(e => ymOf(e.date) === ym).reduce((a, e) => a + e.amount, 0) : 0, income = k === 0 ? Math.max(0, inc - got) : inc;
+    bal += income - out;
+    rows.push({ym, income, out, bal, wishes: S.wishes.filter(w => !w.bought && w.month === ym), over: ms.cats.filter(c => c.reserved > c.budget)});
+  }
+  return rows;
+}
 function monthStats(ym) {
   const D = dim(ym), t = today(), tym = ymOf(t);
   const cats = S.categories.map(c => ({cat: c, budget: getBudget(ym, c), spent: 0, count: 0}));
@@ -944,6 +980,9 @@ function monthStats(ym) {
     daily[+e.date.slice(8)] += e.amount; count++;
     const c = cmap[e.catId]; if (c) { c.spent += e.amount; c.count++; } else other += e.amount;
   }
+  for (const c of cats) c.reserved = 0;
+  for (const w of S.wishes) if (!w.bought && w.month === ym && cmap[w.catId]) cmap[w.catId].reserved += w.price; // la wishlist réserve sa part du budget
+  const reserved = cats.reduce((a, x) => a + x.reserved, 0);
   for (const c of cats) c.ratio = c.budget > 0 ? c.spent / c.budget : (c.spent > 0 ? 9 : 0);
   const budget = cats.reduce((a, x) => a + x.budget, 0);
   const spent = daily.reduce((a, b) => a + b, 0);
@@ -952,9 +991,9 @@ function monthStats(ym) {
   const allowance = budget / D;
   let spentBefore = 0; for (let d = 1; d < elapsed; d++) spentBefore += daily[d];
   const remainingDays = status === 'current' ? D - elapsed + 1 : status === 'future' ? D : 0;
-  const todayAllowance = status === 'current' ? Math.max(0, (budget - spentBefore) / remainingDays) : allowance;
+  const todayAllowance = status === 'current' ? Math.max(0, (budget - spentBefore - reserved) / remainingDays) : Math.max(0, (budget - reserved) / D);
   const projection = status === 'past' ? spent : elapsed > 0 ? spent / elapsed * D : 0;
-  return {ym, D, cats, daily, budget, spent, other, count, status, elapsed, allowance, todayAllowance, projection, remaining: budget - spent, remainingDays};
+  return {ym, D, cats, daily, budget, spent, other, count, status, elapsed, allowance, todayAllowance, projection, remaining: budget - spent, remainingDays, reserved, free: budget - spent - reserved};
 }
 
 const TITLES = [[1,'Apprenti'],[2,'Habitant'],[3,'Écuyer'],[5,'Chevalier'],[7,'Gardien du Trésor'],[10,"Paladin de l'Épargne"],[13,'Bâtisseur de cité'],[16,'Seigneur du FCFA'],[20,'Souverain de la vallée'],[25,'Légende vivante']];
@@ -1386,7 +1425,7 @@ function drawBuild(g, it, pal, VW, ghost) {
 // Ce qui rend chaque lieu reconnaissable
 const PLACE_INFO = {
   home: 'Héros, budgets, trésorerie, apparence', archives: 'Le journal du mois', market: 'Noter une dépense ou une rentrée',
-  board: 'Les quêtes et la progression', bank: 'Budget, réel et écarts', lab: 'Les suivis personnalisés', belvedere: 'Un conseil, face à la vallée',
+  board: 'Les quêtes et la progression', bank: 'Budget, réel et écarts', lab: 'Les suivis personnalisés', belvedere: 'Wishlist, prévisions et conseils',
 };
 const DIGITS = {'4': ['x.x', 'x.x', 'xxx', '..x', '..x'], '3': ['xxx', '..x', '.xx', '..x', 'xxx']};
 const pxText = (g, x, y, txt, col) => [...txt].forEach((ch, k) => (DIGITS[ch] || []).forEach((row, j) => [...row].forEach((v, i) => { if (v === 'x') P1(g, x + k * 4 + i, y + j, col); })));
@@ -1658,7 +1697,7 @@ const SUBMENUS = {
   board:    [['today', 'Du jour'], ['week', 'Semaine'], ['progress', 'Progrès'], ['trophies', 'Trophées'], ['newq', '+ Quête'], ['back', 'Retour']],
   lab:      [['measures', 'Mesures'], ['newt', '+ Suivi'], ['back', 'Retour']],
   home:     [['hero', 'Héros'], ['char', 'Personnage'], ['look', 'Apparence'], ['skins', 'Tenues'], ['budgets', 'Budgets'], ['cats', 'Catégories'], ['save', 'Sauvegarde'], ['rules', 'Règles'], ['back', 'Retour']],
-  belvedere:[['tip', 'Un conseil'], ['back', 'Retour']],
+  belvedere:[['wishes', 'Envies'], ['newwish', '+ Envie'], ['forecast', 'Prévisions'], ['tip', 'Un conseil'], ['back', 'Retour']],
 };
 // L'heure où la session de la porte d'entrée expire (toutes les 15 minutes, le code est redemandé)
 const sessionExp = () => { const m = document.cookie.match(/(?:^|; )oq_exp=(\d+)/); return m ? +m[1] : null; };
@@ -1722,6 +1761,7 @@ function lineOf(place, g, quip) {
   if (place === 'archives') return say + `J'ai ${ms.count} dépense${ms.count > 1 ? 's' : ''} dans mes registres pour ${ymLabel(ms.ym)}.`;
   if (place === 'board') { const done = S.habits.filter(h => habitDone(t, h.id)).length; return say + `Avis à la population ! Quêtes du jour : ${done}/${S.habits.length}.`; }
   if (place === 'lab') { const n = S.trackers.filter(tr => S.trackerLog[t] && S.trackerLog[t][tr.id] != null).length; return say + `Bip ! ${n}/${S.trackers.length} mesure${S.trackers.length > 1 ? 's' : ''} prise${n > 1 ? 's' : ''} aujourd'hui.`; }
+  if (place === 'belvedere' && UI.sub !== 'tip') { const open = S.wishes.filter(w => !w.bought), f = forecast(g), low = f.reduce((a, r) => r.bal < a.bal ? r : a, f[0]); return open.length ? `Ma longue-vue voit ${open.length} envie${open.length > 1 ? 's' : ''} à l'horizon, pour ${fmt(open.reduce((a, w) => a + w.price, 0))}. ${low.bal < 0 ? `Attention : ta trésorerie passerait à ${fmt(low.bal)} en ${ymLabel(low.ym)}.` : `Ta trésorerie ne descend pas sous ${fmt(low.bal)} sur l'année.`}` : 'Ma longue-vue regarde l\'avenir. Note tes envies et tes projets : je te dirai quand tu pourras te les offrir.'; }
   if (place === 'belvedere') return `« ${TIPS[UI.tipIdx % TIPS.length]} »`;
   return heroLine(g);
 }
@@ -1745,8 +1785,61 @@ function panelHTML(g) {
   if (p === 'board') return s === 'week' ? weekPanel() : s === 'trophies' ? trophyPanel(g) : s === 'progress' ? progressPanel(g) : s === 'newq' ? newQuestPanel() : todayQuests();
   if (p === 'lab') return s === 'newt' ? newTrackerPanel() : measuresPanel();
   if (p === 'home') return homePanel(s || 'hero', g);
-  if (p === 'belvedere') { const nx = buildName(g.buildDays); return `<p>${esc(TIPS[UI.tipIdx % TIPS.length])}</p><p class="dim">La ville en contrebas compte ${g.buildDays} construction${g.buildDays > 1 ? 's' : ''}.${nx ? ` Prochaine : ${esc(nx)}${g.buildToday ? ' (en chantier aujourd\'hui)' : ''}.` : ' Le royaume est achevé.'}</p>`; }
+  if (p === 'belvedere') { if (s === 'wishes' || !s) return wishesPanel(g); if (s === 'newwish') return wishForm(); if (s === 'forecast') return forecastPanel(g); const nx = buildName(g.buildDays); return `<p>${esc(TIPS[UI.tipIdx % TIPS.length])}</p><p class="dim">La ville en contrebas compte ${g.buildDays} construction${g.buildDays > 1 ? 's' : ''}.${nx ? ` Prochaine : ${esc(nx)}${g.buildToday ? ' (en chantier aujourd\'hui)' : ''}.` : ' Le royaume est achevé.'}</p>`; }
   return '';
+}
+const WISH_ICON = '<svg class="gift" viewBox="0 0 8 8" width="16" height="16" shape-rendering="crispEdges" aria-hidden="true"><path fill="#e5484d" d="M1 3h6v5H1z"/><path fill="#ff6b70" d="M0 2h8v2H0z"/><path fill="#ffd166" d="M3 2h2v6H3zM2 0h1v2H2zM5 0h1v2H5z"/></svg>';
+function wishRow(w) {
+  const ms = monthStats(w.month), c = ms.cats.find(x => x.cat.id === w.catId), over = c && c.reserved > c.budget ? c.reserved - c.budget : 0, past = w.month < ymOf(today());
+  if (w.bought) return `<div class="li off">${WISH_ICON}<span class="grow">${esc(w.name)}<br><small class="dim">acheté le ${dayLabel(w.bought.date)}</small></span><b class="dim">${fmt(w.bought.amount)}</b><button class="x" data-act="delWish" data-id="${w.id}" aria-label="Supprimer">×</button></div>`;
+  return `<div class="li col"><div class="row between">${WISH_ICON}<button class="grow wish-name" data-act="editWish" data-id="${w.id}">${esc(w.name)}</button><b class="gold">${fmt(w.price)}</b></div>
+    <small class="${past ? 'red' : 'dim'}">${esc(ymLabel(w.month))} · ${c ? esc(c.cat.name) : 'catégorie supprimée'}${past ? ' · mois passé' : ''}${w.note ? ` · ${esc(w.note)}` : ''}</small>
+    ${over ? `<small class="red">Dépasse le budget ${esc(c.cat.name)} de ${esc(ymLabel(w.month))} (${fmt(c.budget)}) de ${fmt(over)}.</small>` : c ? `<small class="green">Réservé dans le budget ${esc(c.cat.name)} (${fmt(c.budget)}).</small>` : ''}
+    <div class="row">${over ? `<button class="ffbtn sm" data-act="fitWish" data-id="${w.id}" title="Monter le budget de ce mois juste assez">Ajuster</button>` : ''}<button class="ffbtn sm" data-act="buyWish" data-id="${w.id}">Acheté</button><button class="x" data-act="delWish" data-id="${w.id}" aria-label="Supprimer">×</button></div></div>`;
+}
+function wishesPanel(g) {
+  const open = S.wishes.filter(w => !w.bought).sort((a, b) => a.month.localeCompare(b.month)), done = S.wishes.filter(w => w.bought).slice(-5).reverse();
+  return `<div class="row between wrap"><span class="gold">WISHLIST</span><b>${fmt(open.reduce((a, w) => a + w.price, 0))}</b></div>
+    <p class="dim">Chaque envie réserve son prix dans son budget, le mois prévu.</p>
+    ${open.length ? `<div class="list">${open.map(wishRow).join('')}</div>` : '<p class="dim">Aucune envie pour l\'instant. Choisis « + Envie ».</p>'}
+    ${done.length ? `<div class="gold">DÉJÀ OFFERTS</div><div class="list">${done.map(wishRow).join('')}</div>` : ''}`;
+}
+function wishForm(w) {
+  const m = w ? w.month : addMonths(ymOf(today()), 1), cat = w ? w.catId : (catOf('shop') ? 'shop' : S.categories[0].id);
+  return `<form data-form="wish" ${w ? `data-id="${w.id}"` : ''} autocomplete="off"><div class="gold">${w ? 'MODIFIER L\'ENVIE' : 'NOUVELLE ENVIE'}</div>
+    <input name="name" class="full" placeholder="Quoi ? (téléphone, voyage, vélo…)" maxlength="60" required value="${w ? esc(w.name) : ''}">
+    <div class="row"><input class="amount" name="amount" inputmode="numeric" placeholder="Prix estimé" aria-label="Prix" value="${w ? num(w.price) : ''}"><span class="gold">F</span></div>
+    <label class="dim">Dans quel budget ?</label><select name="catId" class="full">${S.categories.map(c => `<option value="${c.id}" ${c.id === cat ? 'selected' : ''}>${esc(c.name)} (${fmt(getBudget(m, c))} par mois)</option>`).join('')}</select>
+    <label class="dim">Pour quel mois ?</label><input type="month" name="month" class="full" value="${m}" min="${ymOf(today())}" required>
+    <input name="note" class="full" placeholder="Note ou lien (facultatif)" maxlength="120" value="${w ? esc(w.note || '') : ''}">
+    <div class="row"><button class="ffbtn grow">${w ? 'Enregistrer' : 'Ajouter à la wishlist'}</button>${w ? '<button type="button" class="ffbtn" data-act="closeModal">Annuler</button>' : ''}</div></form>`;
+}
+function forecastPanel(g) {
+  const f = forecast(g), inc = expectedIncome(), low = f.reduce((a, r) => r.bal < a.bal ? r : a, f[0]), end = f[f.length - 1];
+  return `<div class="gold">PRÉVISIONS SUR 12 MOIS</div>
+    <form data-form="income-plan"><label class="dim">Revenu mensuel prévu</label><div class="row"><input name="amount" class="amount" inputmode="numeric" value="${S.expectedIncome == null ? '' : num(S.expectedIncome)}" placeholder="${num(inc)}"><span class="gold">F</span><button class="ffbtn sm">OK</button></div></form>
+    ${S.expectedIncome == null ? `<p class="dim">${inc ? `Estimé d'après tes rentrées des trois derniers mois : ${fmt(inc)}.` : 'Aucune rentrée récente : indique ton revenu mensuel pour des prévisions justes.'}</p>` : ''}
+    ${g.cash == null ? '<p class="red">Ta trésorerie de départ n\'est pas définie : la courbe part de 0. Menu Trésorerie pour la définir.</p>' : ''}
+    <canvas id="fchart" width="360" height="150"></canvas>
+    <p>${low.bal < 0 ? `<span class="red">Ta trésorerie passerait à ${fmt(low.bal)} en ${esc(ymLabel(low.ym))}.</span> Repousse une envie, ajuste un budget ou prévois une rentrée.` : `Ta trésorerie reste positive : au plus bas ${fmt(low.bal)} (${esc(ymLabel(low.ym))}), ${fmt(end.bal)} dans un an.`}</p>
+    <div class="kv fc">${f.map(r => `<span>${esc(ymLabel(r.ym))}${r.wishes.length ? ` ${WISH_ICON}` : ''}</span><b class="${r.bal < 0 ? 'red' : ''}">${fmt(r.bal)}</b>`).join('')}</div>
+    <p class="dim">Chaque mois : + revenu prévu − budgets du mois. Une envie plus chère que son budget pèse en plus. Le mois en cours ne compte que ce qui reste à dépenser.</p>`;
+}
+function drawForecast() {
+  const cv = $('#fchart'); if (!cv) return; const g = cv.getContext('2d'), f = forecast(UI.game), start = UI.game.cash == null ? 0 : UI.game.cash;
+  const pts = [start, ...f.map(r => r.bal)], W = cv.width, H = cv.height, L = 6, Rr = 6, T = 14, B = 22;
+  const lo = Math.min(0, ...pts), hi = Math.max(1, ...pts), y = v => T + (hi - v) / (hi - lo || 1) * (H - T - B), x = i => L + i * (W - L - Rr) / (pts.length - 1);
+  g.fillStyle = '#0b0910'; g.fillRect(0, 0, W, H);
+  g.fillStyle = '#1a2470'; for (let i = 0; i < pts.length; i++) g.fillRect(Math.round(x(i)), T, 1, H - T - B);
+  if (lo < 0) { g.fillStyle = 'rgba(229,72,77,.18)'; g.fillRect(0, y(0), W, H - B - y(0)); }
+  g.fillStyle = '#a8b0e0'; for (let xx = 0; xx < W; xx += 4) g.fillRect(xx, Math.round(y(0)), 2, 1);
+  g.strokeStyle = '#9ff0a0'; g.lineWidth = 2; g.beginPath(); pts.forEach((v, i) => i ? g.lineTo(x(i), y(v)) : g.moveTo(x(i), y(v))); g.stroke();
+  pts.forEach((v, i) => { g.fillStyle = v < 0 ? '#ff6b70' : '#ffd166'; g.fillRect(Math.round(x(i)) - 2, Math.round(y(v)) - 2, 4, 4); });
+  f.forEach((r, i) => { if (!r.wishes.length) return; const gx = Math.round(x(i + 1)) - 4, gy = Math.round(y(r.bal)) - 14; g.fillStyle = '#e5484d'; g.fillRect(gx + 1, gy + 3, 6, 5); g.fillStyle = '#ff6b70'; g.fillRect(gx, gy + 2, 8, 2); g.fillStyle = '#ffd166'; g.fillRect(gx + 3, gy + 2, 2, 6); g.fillRect(gx + 2, gy, 1, 2); g.fillRect(gx + 5, gy, 1, 2); });
+  g.font = "16px 'VT323'"; g.fillStyle = '#a8b0e0'; g.textAlign = 'center';
+  const ini = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D']; g.fillText('auj.', x(0) + 10, H - 6);
+  f.forEach((r, i) => g.fillText(ini[+r.ym.slice(5) - 1], x(i + 1), H - 6));
+  g.textAlign = 'left'; g.fillStyle = '#ffd166'; g.fillText(kfmt(hi), 8, 12); if (lo < 0) { g.fillStyle = '#ff6b70'; g.fillText(kfmt(lo), 8, H - B - 2); }
 }
 function idlePanel(g) {
   const ms = g.ms, td = ms.daily[ms.elapsed] || 0, alert = ms.cats.some(c => c.budget > 0 && c.spent > c.budget) || td > ms.todayAllowance, worst = [...ms.cats].sort((a, b) => b.ratio - a.ratio).slice(0, (matchMedia('(max-width:640px)').matches ? 4 : 3) - (alert || !S.expenses.length ? 1 : 0));
@@ -1774,7 +1867,7 @@ function expenseRow(e) { const c = catOf(e.catId); return `<button class="li" da
 function recentPanel() { const ex = [...S.expenses].sort((a, b) => b.date.localeCompare(a.date) || (b.ts || 0) - (a.ts || 0)).slice(0, 12); return ex.length ? `<div class="list">${ex.map(expenseRow).join('')}</div>` : '<p class="dim">Aucune dépense pour le moment.</p>'; }
 function bankPanel(s) {
   const ms = monthStats(UI.viewYM), ecart = ms.budget - ms.spent, pct = ms.budget ? ms.spent / ms.budget : 0, head = monthBar(ms.ym);
-  if (s === 'cats') return head + `<div class="list">${[...ms.cats].sort((a, b) => (a.budget - a.spent) - (b.budget - b.spent)).map(c => `<div class="li col"><div class="row between">${monImg(c.cat, 16, c.ratio >= 1)}<span class="grow">${esc(c.cat.name)}</span><span class="${c.budget - c.spent < 0 ? 'red' : 'green'}">${fmtS(c.budget - c.spent)}</span></div>${bar(c.ratio, gaugeCol(c.ratio))}<small class="dim">${fmt(c.spent)} / ${fmt(c.budget)} · ${Math.round(c.ratio * 100)} %</small></div>`).join('')}</div>`;
+  if (s === 'cats') return head + `<div class="list">${[...ms.cats].sort((a, b) => (a.budget - a.spent) - (b.budget - b.spent)).map(c => `<div class="li col"><div class="row between">${monImg(c.cat, 16, c.ratio >= 1)}<span class="grow">${esc(c.cat.name)}</span><span class="${c.budget - c.spent < 0 ? 'red' : 'green'}">${fmtS(c.budget - c.spent)}</span></div>${bar(c.ratio, gaugeCol(c.ratio))}<small class="dim">${fmt(c.spent)} / ${fmt(c.budget)} · ${Math.round(c.ratio * 100)} %${c.reserved ? ` · ${fmt(c.reserved)} réservés (wishlist)` : ''}</small></div>`).join('')}</div>`;
   if (s === 'daily') return head + `<canvas id="dchart" width="${ms.D * 6 + 2}" height="60"></canvas><div class="row between dim"><small>1</small><small>${ms.D}</small></div><p class="dim">Vert : sous le budget moyen de ${fmt(ms.allowance)} par jour. Rouge : au-dessus.</p>`;
   if (s === 'top') { const top = S.expenses.filter(e => ymOf(e.date) === ms.ym).sort((a, b) => b.amount - a.amount).slice(0, 8); return head + (top.length ? `<div class="list">${top.map(expenseRow).join('')}</div>` : '<p class="dim">Rien ce mois-ci.</p>'); }
   const proj = ms.status === 'current' ? ms.budget - ms.projection : null;
@@ -1880,7 +1973,7 @@ function homePanel(s, g) {
   if (s === 'cash') return cashPanel(g);
   if (s === 'skins') return `<div class="list">${Object.entries(SKINS).map(([k, sk]) => { const on = S.world.skins.includes(k), src = CHESTS.find(c => c.skin === k); return `<button class="li ${on ? '' : 'off'} ${S.world.skin === k ? 'sel' : ''}" ${on ? `data-act="skin" data-id="${k}"` : 'disabled'}>${robotImg('hero|' + heroChar() + '|' + k + '|' + JSON.stringify(heroLook()), heroOutfitFor(k, heroLook(), heroChar()), 32, on ? {} : {grey: true})}<span class="grow">${on ? esc(sk.name) : '???'}<br><small class="dim">${on ? (S.world.skin === k ? 'Portée' : 'Toucher pour porter') : esc(src && src.cond ? 'À débloquer : ' + src.cond.txt : '')}</small></span></button>`; }).join('')}</div>`;
   if (s === 'save') return `${SYNC.on ? `<p>${SYNC.err ? '<span class="red">Coffre en ligne injoignable</span> : tes données sont gardées sur cet appareil et repartiront dès que possible.' : `<span class="green">Coffre en ligne actif</span> pour <b class="gold">${esc(accessName())}</b>${SYNC.last ? ` · à jour à ${new Date(SYNC.last).toTimeString().slice(0, 5)}` : ''}. Tes données te suivent sur tous tes appareils, avec le même nom à l'entrée.`}</p>` : `<p class="dim">Tes données restent sur cet appareil. Exporte-les pour les garder ou les transférer.</p>`}<div class="col gap"><button class="ffbtn" data-act="export">Exporter (JSON)</button><button class="ffbtn" data-act="csv">Exporter (CSV)</button><button class="ffbtn" data-act="import">Importer</button><button class="ffbtn red" data-act="reset">Tout effacer</button></div><input type="file" id="importFile" accept=".json,application/json" hidden>`;
-  if (s === 'rules') return `<p>Chaque catégorie a son budget du mois. Le <b class="gold">budget du jour</b> = ce qui reste ÷ jours restants.</p><p><b class="gold">XP par jour</b> : +10 journal tenu, +2 par dépense notée (5 max), +30 à +50 sous le budget du jour (plus tu restes loin de la limite, plus ça rapporte), +20 sans dépense, +15 par quête, +25 si toutes sont faites, +5 par mesure (+10 si l'objectif est atteint).</p><p><b class="gold">Combo</b> : chaque jour de série ajoute 4 % à l'XP du jour, jusqu'à ×2. Paliers : +150 XP à 7 et 14 jours, +500 à 30, 60 et 100.</p><p><b class="gold">Fin de mois</b> : +300 XP si le mois est sous le budget, +40 par catégorie tenue.</p><p><b class="gold">Niveaux</b> : chaque niveau demande 75 XP de plus que le précédent, et débloque souvent un accessoire.</p><p><b class="gold">La ville en contrebas</b> part de zéro : chaque jour terminé sous le budget du jour lui ajoute une construction (chemin, arbre, maison, puits, moulin, lac, église… jusqu'au royaume). Le chantier du jour apparaît dès que la journée est sur la bonne voie.</p><p><b class="gold">Remboursements</b> (Marché › Rembours.) : une avance faite pour quelqu'un, ou ce que tu dois, passe par la trésorerie mais jamais par le budget : ni le budget du jour, ni l'XP, ni la ville ne bougent.</p><p><b class="gold">Météo</b> : soleil sous le budget du jour, nuages près de la limite, pluie au-delà, orage si une catégorie déborde.</p>`;
+  if (s === 'rules') return `<p>Chaque catégorie a son budget du mois. Le <b class="gold">budget du jour</b> = ce qui reste ÷ jours restants.</p><p><b class="gold">XP par jour</b> : +10 journal tenu, +2 par dépense notée (5 max), +30 à +50 sous le budget du jour (plus tu restes loin de la limite, plus ça rapporte), +20 sans dépense, +15 par quête, +25 si toutes sont faites, +5 par mesure (+10 si l'objectif est atteint).</p><p><b class="gold">Combo</b> : chaque jour de série ajoute 4 % à l'XP du jour, jusqu'à ×2. Paliers : +150 XP à 7 et 14 jours, +500 à 30, 60 et 100.</p><p><b class="gold">Fin de mois</b> : +300 XP si le mois est sous le budget, +40 par catégorie tenue.</p><p><b class="gold">Niveaux</b> : chaque niveau demande 75 XP de plus que le précédent, et débloque souvent un accessoire.</p><p><b class="gold">La ville en contrebas</b> part de zéro : chaque jour terminé sous le budget du jour lui ajoute une construction (chemin, arbre, maison, puits, moulin, lac, église… jusqu'au royaume). Le chantier du jour apparaît dès que la journée est sur la bonne voie.</p><p><b class="gold">Wishlist</b> (bouton 🎁) : chaque envie réserve son prix dans le budget de sa catégorie, le mois prévu. Ce mois-là, le budget du jour baisse d'autant. Une fois achetée, elle devient une dépense et la réservation disparaît. Les Prévisions tracent ta trésorerie sur 12 mois.</p><p><b class="gold">Remboursements</b> (Marché › Rembours.) : une avance faite pour quelqu'un, ou ce que tu dois, passe par la trésorerie mais jamais par le budget : ni le budget du jour, ni l'XP, ni la ville ne bougent.</p><p><b class="gold">Météo</b> : soleil sous le budget du jour, nuages près de la limite, pluie au-delà, orage si une catégorie déborde.</p>`;
   return `<label class="dim">Nom du héros</label><input class="full" value="${esc(S.heroName)}" maxlength="20" data-chg="heroName" placeholder="${esc(CHARS[heroChar()].name)}"><div class="kv"><span>Niveau</span><b>${g.level} · ${titleFor(g.level)}</b><span>PV</span><b>${g.hp}/100</b><span>XP</span><b>${num(g.xpIn)}/${num(g.xpNext)}</b><span>Trésorerie</span><b>${g.cash == null ? '—' : fmt(g.cash)}</b></div>${accessName() ? `<p class="dim">Accès ouvert pour <b class="gold">${esc(accessName())}</b>.</p><a class="ffbtn full center" href="/sortie">Se déconnecter</a>` : ''}<div class="col gap"><button class="ffbtn" data-act="sound">Sons : ${S.sound ? 'oui' : 'non'}</button><button class="ffbtn" data-act="music">Musique : ${MUSIC.on ? 'oui' : 'non'}</button></div>`;
 }
 
@@ -1890,15 +1983,17 @@ function renderUI() {
   const g = UI.game = computeGame();
   const items = menuItems(); UI.menuIdx = clamp(UI.menuIdx, 0, items.length - 1);
   const curSub = UI.sub || (UI.place ? SUBMENUS[UI.place][0][0] : null);
-  $('#menu').innerHTML = items.map(([id, label], i) => `<button class="mi ${i === UI.menuIdx ? 'sel' : ''} ${UI.place && id === curSub ? 'cur' : ''}" data-act="menu" data-i="${i}">${esc(label)}</button>`).join('');
+  $('#menu').innerHTML = items.map(([id, label], i) => `<button class="mi ${id === 'back' ? 'back' : ''} ${i === UI.menuIdx ? 'sel' : ''} ${UI.place && id === curSub ? 'cur' : ''}" data-act="menu" data-i="${i}">${esc(label)}</button>`).join('');
+  { const cur = $('#menu .mi.cur') || $('#menu .mi.sel'); if (cur && matchMedia('(max-width:640px)').matches) cur.scrollIntoView({block: 'nearest', inline: 'nearest'}); }
   const pan = $('#panel'), st = pan.scrollTop; pan.innerHTML = panelHTML(g); pan.scrollTop = st;
   $('#status').innerHTML = `<span class="cash" data-act="goCash">Trésorerie <b class="${g.cash != null && g.cash < 0 ? 'red' : 'gold'}">${g.cash == null ? '?' : fmt(g.cash)}</b></span><span>PV <b>${g.hp}</b></span><span class="lv" data-act="goProgress">Niv.<b>${g.level}</b><span class="xpbar"><i style="width:${Math.round(g.xpIn / g.xpNext * 100)}%"></i></span><small class="dim">+${num(g.xpToday)} auj.</small></span><span>Série <b>${g.streak} j</b>${g.combo > 1 ? ` <small class="gold">×${g.combo.toFixed(2).replace('.', ',')}</small>` : ''}</span>`;
   $('#title').textContent = (UI.place ? placeName(UI.place) : 'La cité') + ' · ' + new Date().toTimeString().slice(0, 5);
   const dlg = $('#dlg');
   if (UI.dlg) { dlg.hidden = false; $('#dlgWho').textContent = UI.dlg.who; $('#dlgFace').innerHTML = UI.dlg.face; typeText($('#dlgTxt'), UI.dlg.text); } else dlg.hidden = true;
-  document.body.classList.toggle('open', !!UI.place); document.body.classList.toggle('cfg', UI.place === 'home');
+  document.body.classList.toggle('open', !!UI.place); document.body.classList.toggle('cfg', UI.place === 'home'); document.body.classList.toggle('wish', UI.place === 'belvedere');
   if (UI.place === 'bank' && UI.sub === 'daily') drawDaily();
   if (UI.place === 'lab') drawSparks();
+  if (UI.place === 'belvedere' && UI.sub === 'forecast') drawForecast();
   ensureLayers(g);
   return g;
 }
@@ -1929,7 +2024,7 @@ function chooseMenu(i) {
 function toast(title, msg) { const box = $('#toasts'); while (box.children.length >= 3) box.firstChild.remove(); const el = document.createElement('div'); el.className = 'ff toast'; el.innerHTML = `<b class="gold">${esc(title)}</b><br>${esc(msg)}`; $('#toasts').appendChild(el); setTimeout(() => el.remove(), 3600); }
 function commit(fx) {
   const before = UI.game || computeGame();
-  save(true); const g = renderUI();
+  save(true); if (UI.place === 'belvedere' && UI.dlg && UI.sub !== 'tip') { UI.game = computeGame(); UI.dlg.text = lineOf('belvedere', UI.game); } const g = renderUI();
   if (g.xp > before.xp) { toast('+' + (g.xp - before.xp) + ' XP', fx || 'Bien joué !'); UI.cheerUntil = performance.now() + 1800; }
   progress(g);
 }
@@ -2009,6 +2104,18 @@ const ACT = {
   delIncome: a => { const e = S.incomes.find(x => x.id === a.dataset.id); if (e && confirm(`Supprimer la rentrée de ${fmt(e.amount)} ?`)) { S.incomes = S.incomes.filter(x => x !== e); commit(); } },
   goCash: () => openPlace('bank', 'cash'),
   goConfig: () => { if (UI.place === 'home') closePlace(); else openPlace('home'); },
+  goWish: () => { if (UI.place === 'belvedere') closePlace(); else openPlace('belvedere', 'wishes'); },
+  editWish: a => { const w = S.wishes.find(x => x.id === a.dataset.id); if (w) modal(wishForm(w)); },
+  delWish: a => { const w = S.wishes.find(x => x.id === a.dataset.id); if (w && confirm(`Retirer « ${w.name} » de la wishlist ?`)) { S.wishes = S.wishes.filter(x => x !== w); commit(); } },
+  buyWish: a => { const w = S.wishes.find(x => x.id === a.dataset.id); if (!w) return; modal(`<div class="gold">${esc(w.name.toUpperCase())} : ACHETÉ</div><p class="dim">L'envie devient une dépense dans ${esc((catOf(w.catId) || {}).name || '—')}, et sa réservation est libérée.</p><form data-form="buyWish" data-id="${w.id}" autocomplete="off"><div class="row"><input name="amount" class="amount" inputmode="numeric" value="${num(w.price)}" aria-label="Prix payé"><span class="gold">F</span></div><input name="date" type="date" class="full" value="${today()}"><div class="row"><button class="ffbtn grow">Noter l'achat</button><button type="button" class="ffbtn" data-act="closeModal">Annuler</button></div></form>`); },
+  fitWish: a => { // monte le budget de la catégorie pour ce seul mois, juste assez pour l'envie
+    const w = S.wishes.find(x => x.id === a.dataset.id); if (!w) return; const c = catOf(w.catId); if (!c) return;
+    const ms = monthStats(w.month), mc = ms.cats.find(x => x.cat.id === c.id), need = mc.reserved, old = getBudget(w.month, c), next = addMonths(w.month, 1);
+    if (!confirm(`Passer le budget ${c.name} de ${ymLabel(w.month)} de ${fmt(old)} à ${fmt(need)} ? Les autres mois ne changent pas.`)) return;
+    const nextOld = getBudget(next, c); S.budgets[w.month] = S.budgets[w.month] || {}; S.budgets[w.month][c.id] = need;
+    S.budgets[next] = S.budgets[next] || {}; if (S.budgets[next][c.id] == null) S.budgets[next][c.id] = nextOld;
+    SFX.coin(); toast('Budget ajusté', `${c.name} : ${fmt(need)} en ${ymLabel(w.month)}, puis ${fmt(nextOld)} ensuite.`); commit();
+  },
   goProgress: () => openPlace('board', 'progress'),
   delCat: a => { const c = catOf(a.dataset.id); if (!c) return; if (S.categories.length <= 1) return alert('Il faut garder au moins une catégorie.'); const n = S.expenses.filter(e => e.catId === c.id).length; if (n) return alert(`${n} dépense(s) utilisent « ${c.name} » : renomme-la plutôt.`); if (confirm(`Supprimer « ${c.name} » ?`)) { S.categories = S.categories.filter(x => x !== c); commit(); } },
   look: a => { const v = a.dataset.v || null; if (v && ACCS[v] && ACCS[v].lv > (UI.game || computeGame()).level) return; S.world.look = {...heroLook(), [a.dataset.k]: v}; SFX.click(); commit(); },
@@ -2061,6 +2168,20 @@ document.addEventListener('submit', e => {
   else if (k === 'cat') { const id = uid(), mons = Object.keys(MONS), cols = Object.keys(COLORS); S.categories.push({id, name: v('name').trim(), monster: mons[S.categories.length % mons.length], color: cols[S.categories.length % cols.length], budget: 0}); S.budgets[UI.viewYM] = S.budgets[UI.viewYM] || {}; S.budgets[UI.viewYM][id] = parseAmt(v('budget')); commit(); }
   else if (k === 'welcome') { S.onboarded = true; S.heroName = v('name').trim().slice(0, 20) || CHARS[heroChar()].name; const c = v('cash'); if (c.trim()) { S.startCash = parseAmt(c); S.startDate = today(); } UI.welcomeCash = ''; closeModal(); save(true); renderUI(); progress(UI.game, true); UI.dlg = idleDlg(); renderUI(); }
   else if (k === 'unlock') { unlock(v('code')); }
+  else if (k === 'wish') {
+    const name = v('name').trim().slice(0, 60), price = parseAmt(v('amount')), month = /^\d{4}-\d{2}$/.test(v('month')) ? v('month') : addMonths(ymOf(today()), 1), catId = catOf(v('catId')) ? v('catId') : S.categories[0].id;
+    if (!name) { toast('Quoi ?', 'Donne un nom à ton envie.'); return; } if (!price) { toast('Prix ?', 'Indique un prix estimé.'); return; }
+    const w = f.dataset.id && S.wishes.find(x => x.id === f.dataset.id);
+    if (w) { Object.assign(w, {name, price, month, catId, note: v('note').trim().slice(0, 120)}); closeModal(); }
+    else S.wishes.push({id: uid(), name, price, catId, month, note: v('note').trim().slice(0, 120), bought: null});
+    SFX.quest(); toast(w ? 'Envie modifiée' : 'Ajouté à la wishlist', `${name} : ${fmt(price)} réservés en ${ymLabel(month)}.`); UI.sub = 'wishes'; commit();
+  }
+  else if (k === 'buyWish') {
+    const w = S.wishes.find(x => x.id === f.dataset.id); if (!w) return; const amount = parseAmt(v('amount')) || w.price, date = v('date') || today(), id = uid();
+    S.expenses.push({id, date, amount, catId: catOf(w.catId) ? w.catId : S.categories[0].id, note: '🎁 ' + w.name, ts: Date.now(), wishId: w.id}); delete S.checkins[date];
+    w.bought = {date, amount, expId: id}; closeModal(); fanfare(); toast('Envie réalisée !', `${w.name} : ${fmt(amount)} noté en dépense.`); commit();
+  }
+  else if (k === 'income-plan') { const c = v('amount'); S.expectedIncome = c.trim() ? parseAmt(c) : null; SFX.coin(); commit(); }
   else if (k === 'refund') {
     const amount = parseAmt(v('amount')), who = v('who').trim().slice(0, 40), kind = v('kind') || 'owed';
     if (!who) { toast('Qui ?', 'Indique avec qui.'); return; } if (!amount) { toast('Montant ?', 'Indique le montant.'); return; }
