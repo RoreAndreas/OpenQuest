@@ -87,6 +87,10 @@ body.open .ui{height:56%}
 button.li{cursor:pointer} button.li:hover{background:rgba(255,255,255,.08)}
 .li.off{opacity:.55} .li.sel{outline:2px solid var(--gold)}
 .li small{font-size:16px}
+.li.chg{outline:2px solid var(--gold);outline-offset:-2px}
+#budOk{position:sticky;bottom:0;margin-top:8px;box-shadow:0 0 0 1px #06061a,0 -6px 10px rgba(6,6,26,.6)}
+.li.chg input{color:var(--gold)}
+.ffbtn.pending{background:linear-gradient(#e8b84a,#a0701a);color:#1a1020;text-shadow:none}
 .li>.grow{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .li.flat{background:none;padding:1px 0}
 .li.flat>.grow{flex:0 0 38%}
@@ -153,6 +157,10 @@ canvas.spark{width:100%;height:30px}
   .cats{grid-template-columns:1fr 1fr}
   .cat{font-size:16px}
   .gauge{width:56px}
+  .budrow{flex-wrap:wrap;gap:2px 8px}
+  .budrow input.money{flex:1 1 100%;width:auto}
+  .monthbar{gap:6px}
+  .monthbar span{min-width:0;font-size:9px}
   .toast{padding:5px 10px;font-size:18px}
   .big{font-size:12px}
   .mi{font-size:18px;padding:4px 2px 4px 22px}
@@ -1757,7 +1765,7 @@ function measuresPanel() {
 }
 function newTrackerPanel() { return `<form data-form="tracker"><input name="name" class="full" placeholder="Nom (ex. Cafés)" maxlength="40" required><div class="row"><input name="unit" class="grow" placeholder="Unité" maxlength="15"><select name="dir"><option value="min">au moins</option><option value="max">au plus</option></select><input name="goal" type="number" step="any" placeholder="Objectif" style="width:5.5em"></div><button class="ffbtn">Créer</button></form>`; }
 function homePanel(s, g) {
-  if (s === 'budgets') { const ym = UI.viewYM; return `${monthBar(ym)}<p class="dim">S'applique à ce mois et aux suivants.</p><div class="list">${S.categories.map(c => `<div class="li">${monImg(c, 16)}<span class="grow">${esc(c.name)}</span><input class="money" inputmode="numeric" value="${num(getBudget(ym, c))}" data-chg="catBud" data-id="${c.id}"></div>`).join('')}</div><div class="row between"><span>Total</span><b class="gold">${fmt(totalBudget(ym))}</b></div>`; }
+  if (s === 'budgets') { const ym = UI.viewYM; return `${monthBar(ym)}<p class="dim">Change les montants, puis <b>Valider</b>. Ils comptent pour ce mois et les suivants.</p><form data-form="budgets" autocomplete="off"><div class="list">${S.categories.map(c => `<div class="li budrow">${monImg(c, 16)}<span class="grow">${esc(c.name)}</span><input class="money" inputmode="numeric" name="b_${c.id}" value="${num(getBudget(ym, c))}" data-bud="${getBudget(ym, c)}" aria-label="Budget ${esc(c.name)}"></div>`).join('')}</div><div class="row between"><span>Total</span><b class="gold" id="budTotal">${fmt(totalBudget(ym))}</b></div><button class="ffbtn full" id="budOk">Valider</button></form>`; }
   if (s === 'cats') return `<div class="list">${S.categories.map(c => `<div class="li">${monImg(c, 16)}<input class="grow" value="${esc(c.name)}" maxlength="24" data-chg="catName" data-id="${c.id}"><button class="x" data-act="delCat" data-id="${c.id}">×</button></div>`).join('')}</div><form data-form="cat" class="row"><input name="name" class="grow" placeholder="Nouvelle catégorie" required maxlength="24"><input name="budget" inputmode="numeric" placeholder="Budget" style="width:6em"><button class="ffbtn sm">+</button></form>`;
   if (s === 'look') return lookPanel(g);
   if (s === 'char') return charPanel();
@@ -1906,14 +1914,18 @@ document.addEventListener('input', e => {
   const t = e.target;
   if (t.name === 'amount') { const n = parseAmt(t.value); t.value = n ? num(n) : ''; }
   if (t.closest('form[data-form=add]')) UI.draft[t.name] = t.value;
-  if (t.dataset.chg === 'catBud') { const n = parseAmt(t.value); t.value = n || t.value === '' ? num(n) : ''; }
+  if (t.dataset.bud != null) { // les budgets : on formate, on recompte le total, on signale ce qui n'est pas encore validé
+    const n = parseAmt(t.value); t.value = n || t.value === '' ? num(n) : '';
+    const f = t.form, ins = [...f.querySelectorAll('[data-bud]')]; let total = 0, changed = 0;
+    for (const x of ins) { const v = parseAmt(x.value); total += v; const ch = v !== +x.dataset.bud; x.closest('.li').classList.toggle('chg', ch); if (ch) changed++; }
+    $('#budTotal').textContent = fmt(total); const ok = $('#budOk'); ok.textContent = changed ? `Valider (${changed} changement${changed > 1 ? 's' : ''})` : 'Valider'; ok.classList.toggle('pending', changed > 0);
+  }
 });
 document.addEventListener('change', e => {
   const t = e.target, k = t.dataset.chg, c = t.dataset.id && catOf(t.dataset.id);
   if (t.id === 'importFile') { const f = t.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { const d = JSON.parse(r.result); if (!d || !Array.isArray(d.expenses) || !Array.isArray(d.categories)) throw 0; if (!confirm(`Importer ${d.expenses.length} dépenses ? Les données actuelles seront remplacées.`)) return; S = migrate(d); save(); renderUI(); toast('Import réussi', `${S.expenses.length} dépenses chargées.`); } catch (err) { alert("Ce fichier n'est pas une sauvegarde Budget Quest."); } }; r.readAsText(f); t.value = ''; return; }
   if (k === 'heroName') { S.heroName = t.value.trim().slice(0, 20); commit(); }
   else if (k === 'catName' && c) { if (t.value.trim()) c.name = t.value.trim().slice(0, 24); commit(); }
-  else if (k === 'catBud' && c) { S.budgets[UI.viewYM] = S.budgets[UI.viewYM] || {}; S.budgets[UI.viewYM][c.id] = parseAmt(t.value); commit(); }
   else if (k === 'trackerDate') { UI.trackerDate = t.value && t.value <= today() ? t.value : today(); renderUI(); }
 });
 document.addEventListener('submit', e => {
@@ -1938,6 +1950,11 @@ document.addEventListener('submit', e => {
   else if (k === 'cat') { const id = uid(), mons = Object.keys(MONS), cols = Object.keys(COLORS); S.categories.push({id, name: v('name').trim(), monster: mons[S.categories.length % mons.length], color: cols[S.categories.length % cols.length], budget: 0}); S.budgets[UI.viewYM] = S.budgets[UI.viewYM] || {}; S.budgets[UI.viewYM][id] = parseAmt(v('budget')); commit(); }
   else if (k === 'welcome') { S.onboarded = true; S.heroName = v('name').trim().slice(0, 20) || CHARS[heroChar()].name; const c = v('cash'); if (c.trim()) { S.startCash = parseAmt(c); S.startDate = today(); } closeModal(); save(); renderUI(); progress(UI.game, true); UI.dlg = idleDlg(); renderUI(); }
   else if (k === 'income') { const amount = parseAmt(v('amount')); if (!amount) { toast('Montant ?', 'Indique combien tu as reçu.'); return; } S.incomes.push({id: uid(), date: v('date') || today(), amount, note: v('note').trim().slice(0, 60)}); SFX.coin(); toast('Rentrée notée', `+${fmt(amount)} dans la trésorerie.`); UI.sub = 'income'; commit(); }
+  else if (k === 'budgets') { // valider les budgets du mois affiché
+    const ym = UI.viewYM, row = S.budgets[ym] = S.budgets[ym] || {}; let changed = 0;
+    for (const c of S.categories) { const val = parseAmt(v('b_' + c.id)); if (val !== getBudget(ym, c)) changed++; row[c.id] = val; }
+    SFX.coin(); toast(changed ? 'Budgets enregistrés' : 'Rien à changer', changed ? `${changed} catégorie${changed > 1 ? 's' : ''} · total ${fmt(totalBudget(ym))} pour ${ymLabel(ym)} et les mois suivants.` : `Les budgets de ${ymLabel(ym)} sont déjà à jour.`); commit();
+  }
   else if (k === 'cash') { const c = v('amount'); S.startCash = c.trim() ? parseAmt(c) : null; S.startDate = v('date') || today(); SFX.coin(); commit(); }
 });
 function welcome(step) { // l'accueil : choisir son personnage, puis son nom et sa trésorerie de départ

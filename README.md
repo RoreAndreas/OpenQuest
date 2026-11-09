@@ -175,7 +175,8 @@ Apprenti (1), Habitant (2), Écuyer (3), Chevalier (5), Gardien du Trésor (7), 
 
 - **Budget du jour** = reste du mois ÷ jours restants.
 - **PV** : ils repartent à 100 chaque mois. Une catégorie qui dépasse son budget fait perdre entre 10 et 40 PV ; une journée au-delà de 150 % du budget moyen, 5 PV. Chaque quête accomplie rend 1 PV, jusqu'à 30 par mois.
-- Un budget modifié s'applique au mois choisi et aux mois suivants. Les mois passés gardent leurs écarts d'origine.
+- **Changer un budget** : Config › Budgets, choisis le mois avec les flèches, modifie les montants (les lignes changées s'entourent d'or et le total se met à jour), puis touche **Valider**. Une confirmation s'affiche. Rien n'est enregistré avant Valider.
+- Un budget validé s'applique au mois choisi et aux mois suivants. Les mois passés gardent leurs écarts d'origine.
 
 ## Crédits
 
