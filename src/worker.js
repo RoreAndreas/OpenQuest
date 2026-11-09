@@ -6,7 +6,8 @@
    ACCESS_LOG s'il est relié : on sait ainsi qui a accès, et quand.
    ================================================================ */
 import {DurableObject} from 'cloudflare:workers';
-const SESSION = 'oq_session', NAME = 'oq_name', DAYS = 30, MAX_STATE = 1800000;
+// La session dure 15 minutes : passé ce délai, le code d'accès est redemandé. Le nom, lui, est retenu 30 jours.
+const SESSION = 'oq_session', NAME = 'oq_name', EXP = 'oq_exp', SESSION_MIN = 15, NAME_DAYS = 30, MAX_STATE = 1800000;
 
 // Le coffre de chaque joueur : un Durable Object par nom d'accès, qui garde la dernière copie de ses données
 export class Coffre extends DurableObject {
@@ -47,8 +48,8 @@ const cookies = req => Object.fromEntries((req.headers.get('Cookie') || '').spli
 
 // La session : nom.expiration.signature, signée avec le secret (changer TOKEN_PASS ferme toutes les sessions)
 async function makeSession(name, secret) {
-  const exp = Date.now() + DAYS * 864e5, n = b64urlText(name);
-  return `${n}.${exp}.${await hmac(secret, `${n}.${exp}`)}`;
+  const exp = Date.now() + SESSION_MIN * 6e4, n = b64urlText(name);
+  return {exp, token: `${n}.${exp}.${await hmac(secret, `${n}.${exp}`)}`};
 }
 async function readSession(token, secret) {
   if (!token) return null;
@@ -87,6 +88,13 @@ ${msg ? `<p class="err">${esc(msg)}</p>` : ''}<form method="post" action="/acces
 <label for="c">Code d'accès</label><input id="c" name="code" type="password" maxlength="200" required>
 <button>Entrer</button></form>`, msg ? 401 : 200);
 
+// Les cookies d'une session ouverte : la session (HttpOnly, 15 min), le nom et l'heure d'expiration (lisibles par le jeu)
+async function sessionCookies(name, secret, secure) {
+  const {exp, token} = await makeSession(name, secret), keep = NAME_DAYS * 86400;
+  return [['Set-Cookie', `${SESSION}=${token}; Path=/; Max-Age=${SESSION_MIN * 60}; HttpOnly; SameSite=Lax${secure}`], ['Set-Cookie', `${NAME}=${encodeURIComponent(name)}; Path=/; Max-Age=${keep}; SameSite=Lax${secure}`], ['Set-Cookie', `${EXP}=${exp}; Path=/; Max-Age=${keep}; SameSite=Lax${secure}`]];
+}
+const nameCookie = req => { try { return decodeURIComponent(cookies(req)[NAME] || ''); } catch (e) { return ''; } };
+
 export default {
   fetch(request, env, ctx) { return gate({request, env, waitUntil: p => ctx.waitUntil(p), next: () => env.ASSETS.fetch(request)}); },
 };
@@ -96,7 +104,7 @@ async function gate(context) {
   const secure = url.protocol === 'https:' ? '; Secure' : '';
 
   if (url.pathname === '/sortie') { // se déconnecter
-    return new Response(null, {status: 302, headers: [['Location', '/'], ['Set-Cookie', `${SESSION}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${secure}`], ['Set-Cookie', `${NAME}=; Path=/; Max-Age=0; SameSite=Lax${secure}`]]});
+    return new Response(null, {status: 302, headers: [['Location', '/'], ['Set-Cookie', `${SESSION}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${secure}`], ['Set-Cookie', `${NAME}=; Path=/; Max-Age=0; SameSite=Lax${secure}`], ['Set-Cookie', `${EXP}=; Path=/; Max-Age=0; SameSite=Lax${secure}`]]});
   }
   if (url.pathname === '/acces' && request.method === 'POST') { // le formulaire d'entrée
     const form = await request.formData().catch(() => null);
@@ -107,12 +115,19 @@ async function gate(context) {
       return loginForm(!name ? 'Indique ton nom.' : 'Code incorrect.', name);
     }
     await logAccess(context, {ok: true, name});
-    const max = DAYS * 86400;
-    return new Response(null, {status: 303, headers: [['Location', '/'], ['Set-Cookie', `${SESSION}=${await makeSession(name, secret)}; Path=/; Max-Age=${max}; HttpOnly; SameSite=Lax${secure}`], ['Set-Cookie', `${NAME}=${encodeURIComponent(name)}; Path=/; Max-Age=${max}; SameSite=Lax${secure}`]]});
+    return new Response(null, {status: 303, headers: [['Location', '/'], ...(await sessionCookies(name, secret, secure))]});
+  }
+  if (url.pathname === '/api/renouveler' && request.method === 'POST') { // le code redemandé toutes les 15 minutes, sans quitter le jeu
+    const body = await request.json().catch(() => ({}));
+    const name = String(body.name || nameCookie(request) || '').trim().replace(/\s+/g, ' ').slice(0, 40), code = String(body.code || '');
+    if (!name || !(await sameSecret(code, secret, secret))) { await logAccess(context, {ok: false, name, renew: true}); await new Promise(r => setTimeout(r, 800)); return json({ok: false, erreur: name ? 'Code incorrect.' : 'Nom manquant.'}, 401); }
+    await logAccess(context, {ok: true, name, renew: true});
+    const headers = new Headers({'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store'}); for (const [k, v] of await sessionCookies(name, secret, secure)) headers.append(k, v);
+    return new Response(JSON.stringify({ok: true}), {headers});
   }
   const who = await readSession(cookies(request)[SESSION], secret);
   if (url.pathname === '/api/coffre') return who ? api(request, env, who) : json({erreur: 'session requise'}, 401);
-  if (!who) return loginForm('');
+  if (!who) return loginForm('', nameCookie(request));
   const res = await next();
   const out = new Response(res.body, res); out.headers.set('Cache-Control', 'private, no-store'); out.headers.set('X-Robots-Tag', 'noindex');
   return out;

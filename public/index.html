@@ -47,8 +47,12 @@ button,input,select{font:inherit;color:inherit}
 .view{position:relative;flex:1 1 auto;min-height:170px;background:#000;touch-action:pan-y}
 #scene{width:100%;height:100%;display:block;cursor:grab;touch-action:pan-y}
 #scene:active{cursor:grabbing}
-#dlg{position:absolute;left:8px;right:8px;top:8px;display:flex;gap:10px;align-items:flex-start;padding:8px 10px;cursor:pointer;z-index:2;min-height:64px}
+#dlg{position:absolute;left:8px;right:56px;top:8px;display:flex;gap:10px;align-items:flex-start;padding:8px 10px;cursor:pointer;z-index:2;min-height:64px}
 #dlg[hidden]{display:none}
+.cfgbtn{position:absolute;right:8px;top:8px;z-index:3;width:42px;height:42px;padding:0;display:grid;place-items:center;cursor:pointer}
+.cfgbtn:hover svg{transform:rotate(45deg)}
+.cfgbtn svg{transition:transform .3s;image-rendering:pixelated}
+body.cfg .cfgbtn{border-color:var(--gold)}
 #dlg .face{width:48px;height:48px;flex:none;background:#0a0e3a;border:2px solid #9aa4e0;border-radius:3px}
 #dlgWho{font-family:var(--px);font-size:9px;color:var(--gold);margin-bottom:4px}
 #dlgTxt{font-size:20px;line-height:1.05;min-height:2.1em}
@@ -147,6 +151,10 @@ canvas.spark{width:100%;height:30px}
 @keyframes pop{from{transform:translateY(-8px);opacity:0}}
 #modal{position:fixed;inset:0;background:rgba(4,2,12,.7);display:flex;align-items:center;justify-content:center;z-index:20;padding:16px}
 #modal[hidden]{display:none}
+#lock{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;padding:16px;background:radial-gradient(120% 70% at 50% 18%,#2a2440 0%,#15121f 55%,#0a0810 100%)}
+#lock[hidden]{display:none}
+#lockBox{width:min(100%,380px);padding:16px 18px}
+.lockout{display:block;text-align:center;margin-top:10px;color:var(--dim);font-size:17px}
 #modalBox{width:min(100%,420px);max-height:90vh;overflow:auto;padding:14px 16px}
 #modalBox p{margin:8px 0}
 .banner{background:#7a1e2e;color:#fff;padding:6px 10px;font-size:18px;text-align:center}
@@ -160,6 +168,7 @@ canvas.spark{width:100%;height:30px}
   .view{height:clamp(190px,36vh,330px)}
   .ui{grid-template-columns:128px 1fr;gap:5px;padding:5px}
   .cats{grid-template-columns:1fr 1fr}
+  .cfgbtn{right:5px;top:5px;width:40px;height:40px}
   .cat{font-size:16px}
   .gauge{width:56px}
   .budrow{flex-wrap:wrap;gap:2px 8px}
@@ -171,7 +180,7 @@ canvas.spark{width:100%;height:30px}
   .mi{font-size:18px;padding:4px 2px 4px 22px}
   .mi.sel::before{width:18px;height:13px;margin-top:-6px}
   #panel{padding:8px}
-  #dlg{left:5px;right:5px;top:5px;padding:6px 8px;gap:8px;min-height:56px}
+  #dlg{left:5px;right:50px;top:5px;padding:6px 8px;gap:8px;min-height:56px}
   #dlg .face{width:40px;height:40px}
   #dlgTxt{font-size:18px}
   #status{font-size:16px;gap:2px 8px;padding:5px 6px}
@@ -227,6 +236,7 @@ canvas.spark{width:100%;height:30px}
         <canvas id="scene" aria-label="La cité suspendue, vue depuis le PC de Roré"></canvas>
         <div id="dlg" class="ff" data-act="dlg" hidden><span id="dlgFace"></span><div class="grow"><div id="dlgWho"></div><div id="dlgTxt"></div></div></div>
         <div id="title" class="ff"></div>
+        <button id="cfgBtn" class="ff cfgbtn" data-act="goConfig" title="Configuration" aria-label="Configuration"><svg viewBox="0 0 16 16" width="22" height="22" shape-rendering="crispEdges" aria-hidden="true"><path fill="#e4e4f0" d="M6 1h4v2h2v1h1v2h2v4h-2v2h-1v1h-2v2H6v-2H4v-1H3v-2H1V6h2V4h1V3h2z"/><path fill="#8a94d0" d="M6 6h4v4H6z"/><path fill="#1c2680" d="M7 7h2v2H7z"/></svg></button>
         <div id="tag" class="ff" hidden></div>
         <div class="hint">◀ glisser ▶</div>
       </div>
@@ -243,6 +253,7 @@ canvas.spark{width:100%;height:30px}
 </div>
 <div id="toasts" aria-live="polite"></div>
 <div id="modal" hidden><div id="modalBox" class="ff"></div></div>
+<div id="lock" hidden><form id="lockBox" class="ff" data-form="unlock" autocomplete="off"><div class="gold big center">SESSION EXPIRÉE</div><p class="center">Par sécurité, le code d'accès est redemandé toutes les 15 minutes.</p><p class="center dim" id="lockWho"></p><label class="dim" for="lockCode">Code d'accès</label><input id="lockCode" name="code" type="password" class="full" maxlength="200" required><p class="red center" id="lockErr"></p><button class="ffbtn full">Déverrouiller</button><a class="lockout" href="/sortie">Changer de nom</a></form></div>
 <script>
 'use strict';
 /* ============================================================
@@ -1639,16 +1650,32 @@ function drawScene(now) {
    Le menu ouvre un lieu : la caméra y glisse, le robot du lieu parle, les fenêtres du bas deviennent celles du lieu.
    ================================================================ */
 const UI = {place: null, sub: null, menuIdx: 0, viewYM: ymOf(today()), selDay: null, draft: {amount: '', note: '', date: ''}, pickCat: null, game: null, keyScroll: 0, focusAt: 0, trackerDate: today(), tipIdx: 0};
-const MAIN_MENU = [['market', 'Dépense'], ['bank', 'Écarts'], ['archives', 'Journal'], ['board', 'Quêtes'], ['lab', 'Suivis'], ['home', 'Config']];
+const MAIN_MENU = [['market', 'Dépense'], ['bank', 'Écarts'], ['bank', 'Trésorerie', 'cash'], ['archives', 'Journal'], ['board', 'Quêtes'], ['lab', 'Suivis']];
 const SUBMENUS = {
   market:   [['add', 'Noter'], ['income', 'Rentrée'], ['refund', 'Rembours.'], ['zero', 'Jour zéro'], ['recent', 'Récentes'], ['back', 'Retour']],
-  bank:     [['bilan', 'Bilan'], ['cats', 'Catégories'], ['daily', 'Par jour'], ['top', 'Top'], ['back', 'Retour']],
+  bank:     [['bilan', 'Bilan'], ['cash', 'Trésorerie'], ['cats', 'Catégories'], ['daily', 'Par jour'], ['top', 'Top'], ['back', 'Retour']],
   archives: [['cal', 'Calendrier'], ['list', 'Liste'], ['back', 'Retour']],
   board:    [['today', 'Du jour'], ['week', 'Semaine'], ['progress', 'Progrès'], ['trophies', 'Trophées'], ['newq', '+ Quête'], ['back', 'Retour']],
   lab:      [['measures', 'Mesures'], ['newt', '+ Suivi'], ['back', 'Retour']],
-  home:     [['hero', 'Héros'], ['cash', 'Trésorerie'], ['char', 'Personnage'], ['look', 'Apparence'], ['skins', 'Tenues'], ['budgets', 'Budgets'], ['cats', 'Catégories'], ['save', 'Sauvegarde'], ['rules', 'Règles'], ['back', 'Retour']],
+  home:     [['hero', 'Héros'], ['char', 'Personnage'], ['look', 'Apparence'], ['skins', 'Tenues'], ['budgets', 'Budgets'], ['cats', 'Catégories'], ['save', 'Sauvegarde'], ['rules', 'Règles'], ['back', 'Retour']],
   belvedere:[['tip', 'Un conseil'], ['back', 'Retour']],
 };
+// L'heure où la session de la porte d'entrée expire (toutes les 15 minutes, le code est redemandé)
+const sessionExp = () => { const m = document.cookie.match(/(?:^|; )oq_exp=(\d+)/); return m ? +m[1] : null; };
+function checkLock() {
+  if (!/^https?:$/.test(location.protocol) || !accessName()) return;
+  const exp = sessionExp(), lock = $('#lock'); if (!lock || !exp || Date.now() < exp || !lock.hidden) return;
+  $('#lockWho').textContent = `Connecté sous le nom ${accessName()}.`; $('#lockErr').textContent = ''; $('#lockCode').value = '';
+  lock.hidden = false; if (MUSIC.on) toggleMusic(false); setTimeout(() => $('#lockCode').focus(), 50);
+}
+async function unlock(code) {
+  try {
+    const r = await fetch('/api/renouveler', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({code, name: accessName()}), credentials: 'same-origin'});
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok) { $('#lockErr').textContent = d.erreur || 'Code incorrect.'; SFX.hit(); return; }
+    $('#lock').hidden = true; SFX.quest(); syncPull();
+  } catch (e) { $('#lockErr').textContent = 'Connexion impossible. Réessaie.'; }
+}
 // Le nom donné à la porte d'entrée (Cloudflare), s'il y en a une
 const accessName = () => { const m = document.cookie.match(/(?:^|; )oq_name=([^;]*)/); try { return m ? decodeURIComponent(m[1]) : null; } catch (e) { return null; } };
 const heroName = () => S.heroName || CHARS[heroChar()].name;
@@ -1690,6 +1717,7 @@ function lineOf(place, g, quip) {
   if (quip && L) return `« ${L[(UI.lineIdx = ((UI.lineIdx || 0) + 1)) % L.length]} »`;
   const say = '';
   if (place === 'market') return say + `Qu'as-tu acheté aujourd'hui ? Il te reste ${fmt(Math.max(0, ms.todayAllowance - (ms.daily[ms.elapsed] || 0)))} pour la journée.`;
+  if (place === 'bank' && UI.sub === 'cash') return g.cash == null ? 'Ta trésorerie n\'est pas encore ouverte. Dis-moi combien tu as aujourd\'hui, je tiendrai les comptes.' : `Ta trésorerie : ${fmt(g.cash)}. Je la tiens à jour avec chaque dépense, rentrée et remboursement.`;
   if (place === 'bank') return say + `${ymLabel(ms.ym)} : ${fmt(ms.spent)} dépensés sur ${fmt(ms.budget)}. Écart : ${fmtS(ms.budget - ms.spent)}.`;
   if (place === 'archives') return say + `J'ai ${ms.count} dépense${ms.count > 1 ? 's' : ''} dans mes registres pour ${ymLabel(ms.ym)}.`;
   if (place === 'board') { const done = S.habits.filter(h => habitDone(t, h.id)).length; return say + `Avis à la population ! Quêtes du jour : ${done}/${S.habits.length}.`; }
@@ -1712,7 +1740,7 @@ function panelHTML(g) {
   const p = UI.place, s = UI.sub, ms = g.ms;
   if (!p) return idlePanel(g);
   if (p === 'market') return s === 'recent' ? recentPanel() : s === 'zero' ? zeroPanel() : s === 'income' ? incomePanel() : s === 'refund' ? refundPanel(g) : addPanel();
-  if (p === 'bank') return bankPanel(s || 'bilan');
+  if (p === 'bank') return s === 'cash' ? cashPanel(g) : bankPanel(s || 'bilan');
   if (p === 'archives') return s === 'list' ? listPanel() : calPanel();
   if (p === 'board') return s === 'week' ? weekPanel() : s === 'trophies' ? trophyPanel(g) : s === 'progress' ? progressPanel(g) : s === 'newq' ? newQuestPanel() : todayQuests();
   if (p === 'lab') return s === 'newt' ? newTrackerPanel() : measuresPanel();
@@ -1819,13 +1847,18 @@ function refundPay(id) {
   const r = S.refunds.find(x => x.id === id); if (!r) return; const rest = refundRest(r), owed = r.dir === 'owed';
   modal(`<div class="gold">${owed ? `${esc(r.who.toUpperCase())} TE REMBOURSE` : `TU REMBOURSES ${esc(r.who.toUpperCase())}`}</div><p class="dim">Il reste ${fmt(rest)} sur ${fmt(r.amount)}. Un remboursement partiel est possible.</p><form data-form="refundPay" data-id="${r.id}" autocomplete="off"><div class="row"><input name="amount" class="amount" inputmode="numeric" value="${num(rest)}"><span class="gold">F</span></div><input name="date" type="date" class="full" value="${today()}"><div class="row"><button class="ffbtn grow">OK</button><button type="button" class="ffbtn" data-act="closeModal">Annuler</button></div></form>`);
 }
-function cashPanel(g) {
-  const ms = g.ms, inc = [...S.incomes].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8);
-  return `<div class="row between"><span class="gold">TRÉSORERIE</span><b class="big ${g.cash != null && g.cash < 0 ? 'red' : ''}">${g.cash == null ? '—' : fmt(g.cash)}</b></div>
-    <form data-form="cash" class="col"><label class="dim">Trésorerie de départ</label><div class="row"><input name="amount" class="amount" inputmode="numeric" value="${S.startCash == null ? '' : num(S.startCash)}" placeholder="0"><span class="gold">F</span></div>
-    <div class="row"><span class="dim">au</span><input type="date" name="date" class="grow" value="${esc(S.startDate || today())}"><button class="ffbtn">OK</button></div></form>
-    ${g.cash != null ? `<div class="kv"><span>Départ</span><b>${fmt(S.startCash)}</b><span>+ Rentrées</span><b class="green">${fmt(g.inc)}</b><span>− Dépenses</span><b class="red">${fmt(g.out)}</b>${g.refundNet ? `<span>${g.refundNet > 0 ? '+' : '−'} Remboursements</span><b class="${g.refundNet > 0 ? 'green' : 'red'}">${fmt(Math.abs(g.refundNet))}</b>` : ''}${g.owedOpen ? `<span>On te doit encore</span><b class="green">${fmt(g.owedOpen)}</b>` : ''}${g.oweOpen ? `<span>Tu dois encore</span><b class="red">${fmt(g.oweOpen)}</b>` : ''}<span>Fin du mois (si le budget est tenu)</span><b>${fmt(g.cash - Math.max(0, ms.remaining))}</b></div>` : '<p class="dim">Indique combien tu as aujourd\'hui : la trésorerie suivra tes dépenses et tes rentrées.</p>'}
-    <div class="gold">RENTRÉES</div>${inc.length ? `<div class="list">${inc.map(e => `<div class="li"><span class="grow">${esc(e.note || 'Rentrée')}<br><small class="dim">${dayLabel(e.date)}</small></span><span class="green">+${fmt(e.amount)}</span><button class="x" data-act="delIncome" data-id="${e.id}" aria-label="Supprimer">×</button></div>`).join('')}</div>` : '<p class="dim">Aucune. Marché › Rentrée pour en ajouter.</p>'}`;
+function cashPanel(g) { // la trésorerie : le solde du jour, et d'où il vient
+  const ms = g.ms, sd = S.startDate || today(), inc = [...S.incomes].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8);
+  const before = S.expenses.filter(e => e.date < sd && ymOf(e.date) === ymOf(today())), beforeSum = before.reduce((a, e) => a + e.amount, 0);
+  const sdShort = `${sd.slice(8, 10)}/${sd.slice(5, 7)}`;
+  const head = `<div class="row between wrap"><span class="gold">TRÉSORERIE</span><b class="big ${g.cash != null && g.cash < 0 ? 'red' : ''}">${g.cash == null ? '—' : fmt(g.cash)}</b></div>`;
+  const calc = g.cash == null ? '<p class="dim">Indique combien tu as aujourd\'hui : la trésorerie suivra ensuite tes dépenses, tes rentrées et tes remboursements.</p>'
+    : `<div class="kv"><span>Départ (${sdShort})</span><b>${fmt(S.startCash)}</b><span>+ Rentrées</span><b class="green">${fmt(g.inc)}</b><span>− Dépenses</span><b class="red">${fmt(g.out)}</b>${g.refundNet ? `<span>${g.refundNet > 0 ? '+' : '−'} Remboursements</span><b class="${g.refundNet > 0 ? 'green' : 'red'}">${fmt(Math.abs(g.refundNet))}</b>` : ''}<span class="gold">= Aujourd'hui</span><b class="gold">${fmt(g.cash)}</b></div>
+      ${beforeSum ? `<p class="dim">${before.length > 1 ? `${before.length} dépenses de ce mois (${fmt(beforeSum)}) datent d'avant le départ : elles ne sont pas déduites` : `1 dépense de ce mois (${fmt(beforeSum)}) date d'avant le départ : elle n'est pas déduite`}. Recule la date de départ au 1er du mois si elle${before.length > 1 ? 's doivent' : ' doit'} compter.</p>` : ''}
+      <div class="kv">${g.owedOpen ? `<span>On te doit encore</span><b class="green">${fmt(g.owedOpen)}</b>` : ''}${g.oweOpen ? `<span>Tu dois encore</span><b class="red">${fmt(g.oweOpen)}</b>` : ''}<span>Fin du mois, budget épuisé</span><b>${fmt(g.cash - Math.max(0, ms.remaining))}</b></div>`;
+  return head + calc + `<div class="gold">DÉPART</div><form data-form="cash" class="col"><div class="row"><input name="amount" class="amount" inputmode="numeric" value="${S.startCash == null ? '' : num(S.startCash)}" placeholder="0" aria-label="Trésorerie de départ"><span class="gold">F</span></div>
+    <div class="row"><span class="dim">au</span><input type="date" name="date" class="grow" value="${esc(sd)}"><button class="ffbtn">Valider</button></div></form>
+    <div class="gold">RENTRÉES</div>${inc.length ? `<div class="list">${inc.map(e => `<div class="li"><span class="grow">${esc(e.note || 'Rentrée')}<br><small class="dim">${dayLabel(e.date)}${e.date < sd ? ' · avant le départ, non comptée' : ''}</small></span><span class="green">+${fmt(e.amount)}</span><button class="x" data-act="delIncome" data-id="${e.id}" aria-label="Supprimer">×</button></div>`).join('')}</div>` : '<p class="dim">Aucune. Marché › Rentrée pour en ajouter.</p>'}`;
 }
 function lookPanel(g) { // l'apparence : les couleurs, et les accessoires gagnés avec les niveaux
   const L = heroLook(), sw = c => `<i style="background:${c}"></i>`, o = (k, v, inner) => `<button class="sw ${L[k] === v ? 'on' : ''}" data-act="look" data-k="${k}" data-v="${v == null ? '' : v}">${inner}</button>`;
@@ -1863,7 +1896,7 @@ function renderUI() {
   $('#title').textContent = (UI.place ? placeName(UI.place) : 'La cité') + ' · ' + new Date().toTimeString().slice(0, 5);
   const dlg = $('#dlg');
   if (UI.dlg) { dlg.hidden = false; $('#dlgWho').textContent = UI.dlg.who; $('#dlgFace').innerHTML = UI.dlg.face; typeText($('#dlgTxt'), UI.dlg.text); } else dlg.hidden = true;
-  document.body.classList.toggle('open', !!UI.place);
+  document.body.classList.toggle('open', !!UI.place); document.body.classList.toggle('cfg', UI.place === 'home');
   if (UI.place === 'bank' && UI.sub === 'daily') drawDaily();
   if (UI.place === 'lab') drawSparks();
   ensureLayers(g);
@@ -1884,7 +1917,7 @@ function closePlace() { UI.place = null; UI.sub = null; UI.dlg = null; UI.menuId
 function chooseMenu(i) {
   const items = menuItems(), it = items[i]; if (!it) return;
   UI.menuIdx = i;
-  if (!UI.place) return openPlace(it[0]);
+  if (!UI.place) return openPlace(it[0], it[2]);
   const [id] = it;
   if (id === 'back') return closePlace();
   if (id === 'tip') { UI.tipIdx++; UI.dlg.text = lineOf('belvedere', UI.game); SFX.click(); return renderUI(); }
@@ -1974,7 +2007,8 @@ const ACT = {
   refundPay: a => refundPay(a.dataset.id),
   delRefund: a => { const r = S.refunds.find(x => x.id === a.dataset.id); if (r && confirm(`Supprimer le remboursement « ${r.who} » de ${fmt(r.amount)} ?`)) { S.refunds = S.refunds.filter(x => x !== r); commit(); } },
   delIncome: a => { const e = S.incomes.find(x => x.id === a.dataset.id); if (e && confirm(`Supprimer la rentrée de ${fmt(e.amount)} ?`)) { S.incomes = S.incomes.filter(x => x !== e); commit(); } },
-  goCash: () => openPlace('home', 'cash'),
+  goCash: () => openPlace('bank', 'cash'),
+  goConfig: () => { if (UI.place === 'home') closePlace(); else openPlace('home'); },
   goProgress: () => openPlace('board', 'progress'),
   delCat: a => { const c = catOf(a.dataset.id); if (!c) return; if (S.categories.length <= 1) return alert('Il faut garder au moins une catégorie.'); const n = S.expenses.filter(e => e.catId === c.id).length; if (n) return alert(`${n} dépense(s) utilisent « ${c.name} » : renomme-la plutôt.`); if (confirm(`Supprimer « ${c.name} » ?`)) { S.categories = S.categories.filter(x => x !== c); commit(); } },
   look: a => { const v = a.dataset.v || null; if (v && ACCS[v] && ACCS[v].lv > (UI.game || computeGame()).level) return; S.world.look = {...heroLook(), [a.dataset.k]: v}; SFX.click(); commit(); },
@@ -2026,6 +2060,7 @@ document.addEventListener('submit', e => {
   else if (k === 'track') { const val = v('v'); if (val === '' || isNaN(+val)) return; const d = UI.trackerDate; S.trackerLog[d] = S.trackerLog[d] || {}; S.trackerLog[d][f.dataset.id] = +val; SFX.coin(); commit('Mesure enregistrée.'); }
   else if (k === 'cat') { const id = uid(), mons = Object.keys(MONS), cols = Object.keys(COLORS); S.categories.push({id, name: v('name').trim(), monster: mons[S.categories.length % mons.length], color: cols[S.categories.length % cols.length], budget: 0}); S.budgets[UI.viewYM] = S.budgets[UI.viewYM] || {}; S.budgets[UI.viewYM][id] = parseAmt(v('budget')); commit(); }
   else if (k === 'welcome') { S.onboarded = true; S.heroName = v('name').trim().slice(0, 20) || CHARS[heroChar()].name; const c = v('cash'); if (c.trim()) { S.startCash = parseAmt(c); S.startDate = today(); } UI.welcomeCash = ''; closeModal(); save(true); renderUI(); progress(UI.game, true); UI.dlg = idleDlg(); renderUI(); }
+  else if (k === 'unlock') { unlock(v('code')); }
   else if (k === 'refund') {
     const amount = parseAmt(v('amount')), who = v('who').trim().slice(0, 40), kind = v('kind') || 'owed';
     if (!who) { toast('Qui ?', 'Indique avec qui.'); return; } if (!amount) { toast('Montant ?', 'Indique le montant.'); return; }
@@ -2048,7 +2083,7 @@ document.addEventListener('submit', e => {
 function welcome(step) { // l'accueil : choisir son personnage, puis son nom et sa trésorerie de départ
   if (!step) return modal(`<div class="center"><div class="gold big">BUDGET QUEST</div><p>Depuis son PC de l'Open Space, Roré veille sur la cité suspendue. Choisis qui tu seras dans la cité.</p></div><div class="chars">${CHAR_ORDER.map(k => `<button class="charc" data-act="welcomeChar" data-k="${k}">${robotImg(k, CHARS[k].outfit, 44)}<b>${esc(CHARS[k].name)}</b><small>${esc(CHARS[k].archetype)}</small>${CHARS[k].isNew ? '<i class="new">NOUVEAU</i>' : ''}</button>`).join('')}</div>`);
   const k = heroChar();
-  modal(`<div class="center">${robotImg(k, CHARS[k].outfit, 80)}<div class="gold">${esc(CHARS[k].name.toUpperCase())}</div><small class="dim">${esc(CHARS[k].archetype)}</small></div><form data-form="welcome" autocomplete="off"><label class="dim">Nom du héros</label><input name="name" class="full" value="${esc(CHARS[k].name)}" maxlength="20"><label class="dim">Trésorerie de départ (ce que tu as aujourd'hui)</label><div class="row"><input name="cash" class="amount" inputmode="numeric" placeholder="0" value="${esc(UI.welcomeCash || '')}"><span class="gold">F</span></div><p class="dim">Tu pourras la changer dans Config › Trésorerie. La vallée en contrebas est vide : elle se bâtira jour après jour.</p><div class="row"><button type="button" class="ffbtn" data-act="welcomeBack">◂ Retour</button><button class="ffbtn grow">Commencer</button></div></form>`);
+  modal(`<div class="center">${robotImg(k, CHARS[k].outfit, 80)}<div class="gold">${esc(CHARS[k].name.toUpperCase())}</div><small class="dim">${esc(CHARS[k].archetype)}</small></div><form data-form="welcome" autocomplete="off"><label class="dim">Nom du héros</label><input name="name" class="full" value="${esc(CHARS[k].name)}" maxlength="20"><label class="dim">Trésorerie de départ (ce que tu as aujourd'hui)</label><div class="row"><input name="cash" class="amount" inputmode="numeric" placeholder="0" value="${esc(UI.welcomeCash || '')}"><span class="gold">F</span></div><p class="dim">Tu pourras la changer dans Trésorerie. La vallée en contrebas est vide : elle se bâtira jour après jour.</p><div class="row"><button type="button" class="ffbtn" data-act="welcomeBack">◂ Retour</button><button class="ffbtn grow">Commencer</button></div></form>`);
 }
 
 
@@ -2069,6 +2104,7 @@ function welcome(step) { // l'accueil : choisir son personnage, puis son nom et 
   document.addEventListener('wheel', e => { if (e.target.id !== 'scene') return; e.preventDefault(); SCENE.target = null; SCENE.cam = clampCam(SCENE.cam + (e.deltaX || e.deltaY) / SZ); }, {passive: false});
   const tag = () => (document.activeElement && document.activeElement.tagName) || '';
   document.addEventListener('keydown', e => {
+    if (!$('#lock').hidden) return;
     if (!$('#modal').hidden || /INPUT|SELECT|TEXTAREA/.test(tag())) { if (e.key === 'Escape' && !$('#modal').hidden) closeModal(); return; }
     const items = menuItems();
     if (e.key === 'ArrowDown') { e.preventDefault(); UI.menuIdx = (UI.menuIdx + 1) % items.length; SFX.click(); renderUI(); }
@@ -2150,7 +2186,8 @@ function boot() {
   };
   requestAnimationFrame(loop);
   if (window.ResizeObserver) new ResizeObserver(() => { sizeScene(); SCENE.cam = clampCam(SCENE.cam); if (SCENE.focus) focusPlace(SCENE.focus); }).observe($('.view'));
-  syncPull(); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncPull(); });
+  syncPull(); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { checkLock(); if ($('#lock').hidden) syncPull(); } });
+  setInterval(checkLock, 5000); checkLock();
   addEventListener('resize', () => { sizeScene(); SCENE.cam = clampCam(SCENE.cam); if (SCENE.target != null && SCENE.focus) focusPlace(SCENE.focus); });
 }
 boot();

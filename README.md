@@ -20,15 +20,15 @@ Le jeu tient dans un seul fichier, `public/index.html`. Il est mis en ligne par 
 - **Sur l'appareil**, en cache (`localStorage`) : le jeu marche même si la connexion tombe.
 - **En ligne, dans un coffre** (un Durable Object Cloudflare par joueur), rangé sous **le nom donné à la porte d'entrée** (sans tenir compte des majuscules ni des accents). Chaque modification y part dans la seconde.
 - Au lancement, et chaque fois qu'on revient sur l'onglet, le jeu compare les deux copies et garde **la plus récente**. Avec le même nom, on retrouve donc sa trésorerie de départ, son personnage et toutes ses données sur n'importe quel téléphone ou ordinateur, même après avoir vidé le navigateur.
-- Config › Sauvegarde indique si le coffre est actif et à quelle heure il a été mis à jour. **Exporter (JSON) / Importer** reste possible pour garder une copie à soi.
+- ⚙ › Sauvegarde indique si le coffre est actif et à quelle heure il a été mis à jour. **Exporter (JSON) / Importer** reste possible pour garder une copie à soi.
 - Le coffre est créé automatiquement au déploiement : rien à régler dans le tableau de bord.
 - *À savoir* : toute personne qui connaît le code d'accès et tape le même nom voit les mêmes données. Si deux appareils modifient en même temps, la dernière modification l'emporte.
 **Exporter (CSV)** sort tes dépenses pour Excel, avec `;` comme séparateur.
 
 ## La porte d'entrée : le code d'accès
 
-Au lancement, une fenêtre demande **ton nom** et **le code d'accès**. Le code est vérifié par le Worker, jamais dans la page : il n'apparaît nulle part dans le code du jeu.
-- Le bon code ouvre une session de 30 jours sur cet appareil. Config › Héros affiche le nom donné et un bouton **Se déconnecter**.
+Au lancement, une fenêtre demande **ton nom** et **le code d'accès**. **Toutes les 15 minutes, le code est redemandé** : le jeu se cache derrière un écran « Session expirée » ; il suffit de redonner le code (le nom est retenu), et l'on reprend là où l'on était, sans rien perdre. Le code est vérifié par le Worker, jamais dans la page : il n'apparaît nulle part dans le code du jeu.
+- Le bon code ouvre une session de 15 minutes. Le nom, lui, est retenu 30 jours sur l'appareil. ⚙ › Héros affiche le nom donné et un bouton **Se déconnecter**.
 - Chaque essai, réussi ou non, est noté avec le nom, la date, le pays et l'adresse IP : c'est ainsi qu'on sait qui a accès.
 - **Changer le code** (le secret `TOKEN_PASS`) ferme aussitôt toutes les sessions : chacun devra redonner le nouveau code.
 - Sans secret `TOKEN_PASS`, la porte reste fermée.
@@ -53,7 +53,7 @@ Chaque push sur `main` est déployé automatiquement par **Cloudflare Workers Bu
    - les nouveaux venus de la cité : **Kora** (marchande, foulard et collier de perles), **Ama** (pilote de dirigeable, lunettes et écharpe), **Baobab** (jardinier, chapeau de paille et tablier), **Pépin** (cuisinier, toque) et **Lune** (astronome, cape étoilée).
 2. Donne-lui un nom, et indique ta **trésorerie de départ** : ce que tu as aujourd'hui.
 
-Si tu choisis un membre de l'équipe qui tient un lieu, Roré prend sa place au comptoir. Tu peux changer de personnage plus tard (Config › Personnage) : ton niveau, tes accessoires et tes tenues te suivent.
+Si tu choisis un membre de l'équipe qui tient un lieu, Roré prend sa place au comptoir. Tu peux changer de personnage plus tard (⚙ › Personnage) : ton niveau, tes accessoires et tes tenues te suivent.
 
 ## Ce qu'on voit : la cité, depuis le PC de Roré
 
@@ -121,7 +121,8 @@ Tout passe par les fenêtres bleues du bas : on choisit avec la main, au doigt, 
 | **Journal** | Les Archives | Margaux | Calendrier du mois, liste, modification et suppression |
 | **Quêtes** | Le Tableau des quêtes | Rook | Habitudes du jour, semaine, **progression**, trophées, nouvelle quête |
 | **Suivis** | Le Labo | Boulon | Compteurs personnalisés avec un objectif « au moins » ou « au plus » |
-| **Config** | La maison du héros | — | Héros, **trésorerie**, personnage, apparence, tenues, budgets, catégories, sauvegarde, règles |
+| **Trésorerie** | La Banque | Hares | Le solde d'aujourd'hui et son calcul (départ, rentrées, dépenses, remboursements), ce qui reste dû, le départ à modifier |
+| **⚙ (en haut à droite de l'écran)** | La maison du héros | — | La configuration : héros, personnage, apparence, tenues, budgets, catégories, sauvegarde, règles |
 | — | Le Belvédère (à toucher dans la scène) | Merlain | Des conseils, et la prochaine construction de la vallée |
 
 **Changer de mois** (Écarts, Journal, Budgets) : les deux flèches de part et d'autre du mois, en haut de l'écran, ou les touches Page précédente / Page suivante.
@@ -131,7 +132,7 @@ La barre d'état montre la trésorerie, les PV, le niveau avec sa jauge d'XP et 
 ## La trésorerie
 
 **Trésorerie = trésorerie de départ + rentrées − dépenses ± remboursements**, comptées depuis la date de départ.
-Config › Trésorerie montre le détail, les dernières rentrées, et ce qui restera à la fin du mois si le budget est tenu.
+Trésorerie montre le détail, les dernières rentrées, et ce qui restera à la fin du mois si le budget est tenu.
 
 
 ## Les remboursements (hors budget)
@@ -146,7 +147,7 @@ Marché › **Rembours.** garde la trace de l'argent avancé ou dû, **sans touc
 
 - Chaque ligne note qui, combien, pour quoi et quand. Les totaux « On te doit » et « Tu dois » sont en haut de l'écran.
 - Le bouton ✓ accepte un remboursement partiel : la ligne reste en attente jusqu'à ce que tout soit rendu.
-- Config › Trésorerie détaille l'effet des remboursements et ce qui reste dû dans un sens comme dans l'autre.
+- Trésorerie détaille l'effet des remboursements et ce qui reste dû dans un sens comme dans l'autre.
 ## L'XP : chaque jour compte
 
 | Ce qui rapporte, chaque jour | XP |
@@ -167,7 +168,7 @@ Marché › **Rembours.** garde la trace de l'argent avancé ou dû, **sans touc
 
 ### Les accessoires gagnés avec les niveaux
 
-Chaque personnage commence avec son apparence d'origine. Les accessoires se gagnent en montant de niveau, et le héros les porte aussitôt. Config › Apparence permet de les changer.
+Chaque personnage commence avec son apparence d'origine. Les accessoires se gagnent en montant de niveau, et le héros les porte aussitôt. ⚙ › Apparence permet de les changer.
 
 | Niveau | Accessoire | Emplacement |
 |---|---|---|
@@ -196,14 +197,14 @@ Apprenti (1), Habitant (2), Écuyer (3), Chevalier (5), Gardien du Trésor (7), 
 
 ## Son
 
-- Une petite musique en 8 bits, composée et générée dans le navigateur. Elle est coupée au départ : bouton **♪ MUSIQUE** sous l'écran, ou Config → Héros.
+- Une petite musique en 8 bits, composée et générée dans le navigateur. Elle est coupée au départ : bouton **♪ MUSIQUE** sous l'écran, ou ⚙ › Héros.
 - Un bip à chaque choix de menu et pendant que le texte s'écrit, et une fanfare aux montées de niveau.
 
 ## Règles
 
 - **Budget du jour** = reste du mois ÷ jours restants.
 - **PV** : ils repartent à 100 chaque mois. Une catégorie qui dépasse son budget fait perdre entre 10 et 40 PV ; une journée au-delà de 150 % du budget moyen, 5 PV. Chaque quête accomplie rend 1 PV, jusqu'à 30 par mois.
-- **Changer un budget** : Config › Budgets, choisis le mois avec les flèches, modifie les montants (les lignes changées s'entourent d'or et le total se met à jour), puis touche **Valider**. Une confirmation s'affiche. Rien n'est enregistré avant Valider.
+- **Changer un budget** : ⚙ › Budgets, choisis le mois avec les flèches, modifie les montants (les lignes changées s'entourent d'or et le total se met à jour), puis touche **Valider**. Une confirmation s'affiche. Rien n'est enregistré avant Valider.
 - Un budget validé s'applique au mois choisi et aux mois suivants. Les mois passés gardent leurs écarts d'origine.
 
 ## Crédits
