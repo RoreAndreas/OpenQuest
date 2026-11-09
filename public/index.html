@@ -208,28 +208,6 @@ canvas.spark{width:100%;height:30px}
 #status .cash,#status .lv{cursor:pointer}
 .sw.lock{opacity:.45;cursor:default;border-style:dashed}
 #modalBox .chars{max-height:58vh;overflow:auto}
-/* ---- le jukebox ---- */
-.jk-controls{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin:8px 0}
-.jk-controls .ffbtn{min-width:38px;padding:3px 6px;font-size:18px}
-.jk-controls .ffbtn.on{border-color:var(--gold);color:var(--gold)}
-.jk-controls .jk-play{min-width:48px;background:linear-gradient(#e8b84a,#a0701a);color:#1a1020;text-shadow:none}
-.jk-vol{display:inline-flex;align-items:center;gap:4px;margin-left:4px}.jk-vol input{width:96px;accent-color:#ffd166}
-.jk-list{list-style:none;margin:6px 0;padding:0;display:flex;flex-direction:column;gap:2px}
-.jk-list li{display:flex;align-items:center;gap:2px}.jk-list li.on .jk-track{outline:2px solid var(--gold);outline-offset:-2px}
-.jk-num{width:22px;text-align:center;font-family:var(--px);font-size:9px;color:var(--dim)}.jk-list li.on .jk-num{color:var(--gold)}
-.jkdock{position:absolute;left:10px;bottom:10px;z-index:2;transition:opacity .2s}
-.jkdock:not(.shown){opacity:0;pointer-events:none}
-.dock-bot{position:relative;display:block;padding:0;border:0;background:none;cursor:pointer;filter:drop-shadow(0 6px 8px rgba(0,0,0,.5))}
-.dock-bot svg{display:block;image-rendering:pixelated}
-.jkdock.playing .dock-bot{animation:bot-fly 2.4s ease-in-out infinite}
-.jkdock:not(.playing) .bot-flame{display:none}
-.bot-notes{position:absolute;left:50%;top:-4px;pointer-events:none}
-.bot-notes i{position:absolute;font-style:normal;font-size:14px;color:#ffb070;opacity:0}
-.jkdock.playing .bot-notes i{animation:bot-note 2.1s ease-out infinite}
-.bot-notes i:nth-child(2){color:#ff5fa2;animation-delay:.7s}.bot-notes i:nth-child(3){color:#3ddc97;animation-delay:1.4s}
-@keyframes bot-fly{50%{transform:translateY(-6px)}}
-@keyframes bot-note{0%{opacity:0;transform:translate(0,0)}20%{opacity:1}100%{opacity:0;transform:translate(14px,-34px)}}
-.dock-screen{position:absolute;left:0;bottom:0;width:2px;height:2px;opacity:0;pointer-events:none;overflow:hidden}
 @media (prefers-reduced-motion:reduce){ .arrow::before{animation:none} }
 @media (prefers-reduced-motion:reduce){ .mi.sel::before,#dlg::after{animation:none} }
 </style>
@@ -246,7 +224,6 @@ canvas.spark{width:100%;height:30px}
         <div id="title" class="ff"></div>
         <div id="tag" class="ff" hidden></div>
         <div class="hint">◀ glisser ▶</div>
-        <div id="jkDock" class="jkdock" aria-hidden="true"><button class="dock-bot" data-act="jkOpen" title="Ouvrir le jukebox"><span class="bot-notes"><i>♪</i><i>♫</i><i>♪</i></span><svg viewBox="0 0 16 16" width="48" height="48" shape-rendering="crispEdges"><rect x="7" y="0" width="2" height="2" fill="#ff8a3d"/><rect x="3" y="2" width="10" height="7" fill="#d9d4e8"/><rect x="4" y="3" width="8" height="5" fill="#1c1826"/><rect x="5" y="4" width="2" height="2" fill="#3ddc97"/><rect x="9" y="4" width="2" height="2" fill="#3ddc97"/><rect x="6" y="7" width="4" height="1" fill="#ff5fa2"/><rect x="5" y="9" width="6" height="4" fill="#b8b2cc"/><rect x="2" y="10" width="2" height="2" fill="#d9d4e8"/><rect x="12" y="10" width="2" height="2" fill="#d9d4e8"/><rect x="6" y="13" width="4" height="1" fill="#ff8a3d"/><rect class="bot-flame" x="7" y="14" width="2" height="2" fill="#ffd23d"/></svg></button><div class="dock-screen" id="jkScreen"></div></div>
       </div>
       <div class="ui">
         <nav id="menu" class="ff" aria-label="Menu"></nav>
@@ -820,13 +797,10 @@ const heroImg = (size = 48, opt = {}) => robotImg(heroKey(), heroOutfit(), size,
 
 
 /* ---------------- STATE ---------------- */
-// Le jukebox démarre avec la musique d'OpenQuest
-function defaultJukebox() { return {list: [{id: 'mKU0mVpkJjo', title: "La musique d'OpenQuest"}], repeat: 'all', shuffle: false, volume: .6}; }
 function defaultState() {
   return {
     version: 1, createdAt: today(), heroName: '', sound: true, lastLevel: 1, seenAch: [], lastCat: 'alim',
     startCash: null, startDate: today(), incomes: [], // trésorerie de départ et rentrées d'argent
-    jukebox: defaultJukebox(),
     world: defaultWorld(),
     categories: [
       {id:'alim',   name:'Alimentation', monster:'slime',    color:'vert',   budget:60000},
@@ -869,7 +843,6 @@ function migrate(s) {
   if (!s.world.chests || typeof s.world.chests !== 'object') s.world.chests = {};
   if (!SKINS[s.world.skin]) s.world.skin = 'classique';
   if (!CHARS[s.world.hero]) s.world.hero = 'rore';
-  { const j = s.jukebox && typeof s.jukebox === 'object' ? s.jukebox : defaultJukebox(); s.jukebox = {list: Array.isArray(j.list) ? j.list.filter(t => t && /^[\w-]{11}$/.test(t.id)).slice(0, 60) : [], repeat: ['off', 'all', 'one'].includes(j.repeat) ? j.repeat : 'all', shuffle: !!j.shuffle, volume: isFinite(+j.volume) ? clamp(+j.volume, 0, 1) : .6}; }
   const ol = s.world.look && typeof s.world.look === 'object' ? s.world.look : {}, nl = {...DEFAULT_LOOK};
   if ('acc' in ol) { // ancienne apparence de Roré : couleurs et un seul accessoire
     if (LOOK_EYES[ol.eyes] && ol.eyes !== 'orange') nl.eyes = ol.eyes;
@@ -1657,7 +1630,7 @@ const SUBMENUS = {
   archives: [['cal', 'Calendrier'], ['list', 'Liste'], ['back', 'Retour']],
   board:    [['today', 'Du jour'], ['week', 'Semaine'], ['progress', 'Progrès'], ['trophies', 'Trophées'], ['newq', '+ Quête'], ['back', 'Retour']],
   lab:      [['measures', 'Mesures'], ['newt', '+ Suivi'], ['back', 'Retour']],
-  home:     [['hero', 'Héros'], ['music', 'Jukebox'], ['cash', 'Trésorerie'], ['char', 'Personnage'], ['look', 'Apparence'], ['skins', 'Tenues'], ['budgets', 'Budgets'], ['cats', 'Catégories'], ['save', 'Sauvegarde'], ['rules', 'Règles'], ['back', 'Retour']],
+  home:     [['hero', 'Héros'], ['cash', 'Trésorerie'], ['char', 'Personnage'], ['look', 'Apparence'], ['skins', 'Tenues'], ['budgets', 'Budgets'], ['cats', 'Catégories'], ['save', 'Sauvegarde'], ['rules', 'Règles'], ['back', 'Retour']],
   belvedere:[['tip', 'Un conseil'], ['back', 'Retour']],
 };
 // Le nom donné à la porte d'entrée (Cloudflare), s'il y en a une
@@ -1830,13 +1803,12 @@ function homePanel(s, g) {
   if (s === 'budgets') { const ym = UI.viewYM; return `${monthBar(ym)}<p class="dim">Change les montants, puis <b>Valider</b>. Ils comptent pour ce mois et les suivants.</p><form data-form="budgets" autocomplete="off"><div class="list">${S.categories.map(c => `<div class="li budrow">${monImg(c, 16)}<span class="grow">${esc(c.name)}</span><input class="money" inputmode="numeric" name="b_${c.id}" value="${num(getBudget(ym, c))}" data-bud="${getBudget(ym, c)}" aria-label="Budget ${esc(c.name)}"></div>`).join('')}</div><div class="row between"><span>Total</span><b class="gold" id="budTotal">${fmt(totalBudget(ym))}</b></div><button class="ffbtn full" id="budOk">Valider</button></form>`; }
   if (s === 'cats') return `<div class="list">${S.categories.map(c => `<div class="li">${monImg(c, 16)}<input class="grow" value="${esc(c.name)}" maxlength="24" data-chg="catName" data-id="${c.id}"><button class="x" data-act="delCat" data-id="${c.id}">×</button></div>`).join('')}</div><form data-form="cat" class="row"><input name="name" class="grow" placeholder="Nouvelle catégorie" required maxlength="24"><input name="budget" inputmode="numeric" placeholder="Budget" style="width:6em"><button class="ffbtn sm">+</button></form>`;
   if (s === 'look') return lookPanel(g);
-  if (s === 'music') return jukeboxPanel();
   if (s === 'char') return charPanel();
   if (s === 'cash') return cashPanel(g);
   if (s === 'skins') return `<div class="list">${Object.entries(SKINS).map(([k, sk]) => { const on = S.world.skins.includes(k), src = CHESTS.find(c => c.skin === k); return `<button class="li ${on ? '' : 'off'} ${S.world.skin === k ? 'sel' : ''}" ${on ? `data-act="skin" data-id="${k}"` : 'disabled'}>${robotImg('hero|' + heroChar() + '|' + k + '|' + JSON.stringify(heroLook()), heroOutfitFor(k, heroLook(), heroChar()), 32, on ? {} : {grey: true})}<span class="grow">${on ? esc(sk.name) : '???'}<br><small class="dim">${on ? (S.world.skin === k ? 'Portée' : 'Toucher pour porter') : esc(src && src.cond ? 'À débloquer : ' + src.cond.txt : '')}</small></span></button>`; }).join('')}</div>`;
   if (s === 'save') return `${SYNC.on ? `<p>${SYNC.err ? '<span class="red">Coffre en ligne injoignable</span> : tes données sont gardées sur cet appareil et repartiront dès que possible.' : `<span class="green">Coffre en ligne actif</span> pour <b class="gold">${esc(accessName())}</b>${SYNC.last ? ` · à jour à ${new Date(SYNC.last).toTimeString().slice(0, 5)}` : ''}. Tes données te suivent sur tous tes appareils, avec le même nom à l'entrée.`}</p>` : `<p class="dim">Tes données restent sur cet appareil. Exporte-les pour les garder ou les transférer.</p>`}<div class="col gap"><button class="ffbtn" data-act="export">Exporter (JSON)</button><button class="ffbtn" data-act="csv">Exporter (CSV)</button><button class="ffbtn" data-act="import">Importer</button><button class="ffbtn red" data-act="reset">Tout effacer</button></div><input type="file" id="importFile" accept=".json,application/json" hidden>`;
   if (s === 'rules') return `<p>Chaque catégorie a son budget du mois. Le <b class="gold">budget du jour</b> = ce qui reste ÷ jours restants.</p><p><b class="gold">XP par jour</b> : +10 journal tenu, +2 par dépense notée (5 max), +30 à +50 sous le budget du jour (plus tu restes loin de la limite, plus ça rapporte), +20 sans dépense, +15 par quête, +25 si toutes sont faites, +5 par mesure (+10 si l'objectif est atteint).</p><p><b class="gold">Combo</b> : chaque jour de série ajoute 4 % à l'XP du jour, jusqu'à ×2. Paliers : +150 XP à 7 et 14 jours, +500 à 30, 60 et 100.</p><p><b class="gold">Fin de mois</b> : +300 XP si le mois est sous le budget, +40 par catégorie tenue.</p><p><b class="gold">Niveaux</b> : chaque niveau demande 75 XP de plus que le précédent, et débloque souvent un accessoire.</p><p><b class="gold">La ville en contrebas</b> part de zéro : chaque jour terminé sous le budget du jour lui ajoute une construction (chemin, arbre, maison, puits, moulin, lac, église… jusqu'au royaume). Le chantier du jour apparaît dès que la journée est sur la bonne voie.</p><p><b class="gold">Météo</b> : soleil sous le budget du jour, nuages près de la limite, pluie au-delà, orage si une catégorie déborde.</p>`;
-  return `<label class="dim">Nom du héros</label><input class="full" value="${esc(S.heroName)}" maxlength="20" data-chg="heroName" placeholder="${esc(CHARS[heroChar()].name)}"><div class="kv"><span>Niveau</span><b>${g.level} · ${titleFor(g.level)}</b><span>PV</span><b>${g.hp}/100</b><span>XP</span><b>${num(g.xpIn)}/${num(g.xpNext)}</b><span>Trésorerie</span><b>${g.cash == null ? '—' : fmt(g.cash)}</b></div>${accessName() ? `<p class="dim">Accès ouvert pour <b class="gold">${esc(accessName())}</b>.</p><a class="ffbtn full center" href="/sortie">Se déconnecter</a>` : ''}<div class="col gap"><button class="ffbtn" data-act="sound">Sons : ${S.sound ? 'oui' : 'non'}</button><button class="ffbtn" data-act="chiptune">Air en 8 bits : ${MUSIC.on ? 'oui' : 'non'}</button><button class="ffbtn" data-act="jkOpen">Jukebox${JK.playing ? ' : en lecture' : ''}</button></div>`;
+  return `<label class="dim">Nom du héros</label><input class="full" value="${esc(S.heroName)}" maxlength="20" data-chg="heroName" placeholder="${esc(CHARS[heroChar()].name)}"><div class="kv"><span>Niveau</span><b>${g.level} · ${titleFor(g.level)}</b><span>PV</span><b>${g.hp}/100</b><span>XP</span><b>${num(g.xpIn)}/${num(g.xpNext)}</b><span>Trésorerie</span><b>${g.cash == null ? '—' : fmt(g.cash)}</b></div>${accessName() ? `<p class="dim">Accès ouvert pour <b class="gold">${esc(accessName())}</b>.</p><a class="ffbtn full center" href="/sortie">Se déconnecter</a>` : ''}<div class="col gap"><button class="ffbtn" data-act="sound">Sons : ${S.sound ? 'oui' : 'non'}</button><button class="ffbtn" data-act="music">Musique : ${MUSIC.on ? 'oui' : 'non'}</button></div>`;
 }
 
 /* ---- Le rendu de l'interface ---- */
@@ -1966,13 +1938,7 @@ const ACT = {
   look: a => { const v = a.dataset.v || null; if (v && ACCS[v] && ACCS[v].lv > (UI.game || computeGame()).level) return; S.world.look = {...heroLook(), [a.dataset.k]: v}; SFX.click(); commit(); },
   skin: a => { if (!S.world.skins.includes(a.dataset.id)) return; S.world.skin = a.dataset.id; SFX.quest(); commit(); },
   sound: () => { S.sound = !S.sound; save(true); renderUI(); SFX.click(); },
-  music: () => { if (S.jukebox.list.length) JK.toggle(); else toggleMusic(); renderUI(); },
-  chiptune: () => { toggleMusic(); renderUI(); },
-  jkOpen: () => openPlace('home', 'music'),
-  jkToggle: () => { SFX.click(); JK.toggle(); }, jkPrev: () => JK.prev(), jkNext: () => JK.next(), jkStop: () => JK.stop(),
-  jkRepeat: () => { SFX.click(); JK.cycleRepeat(); }, jkShuffle: () => { SFX.click(); JK.toggleShuffle(); },
-  jkPlay: a => { SFX.click(); JK.play(+a.dataset.i, true); },
-  jkDel: a => { JK.remove(+a.dataset.i); renderUI(); },
+  music: () => { toggleMusic(); renderUI(); },
   export: () => download(`budget-quest-${today()}.json`, JSON.stringify(S, null, 2), 'application/json'),
   csv: () => { const q = s => `"${String(s).replace(/"/g, '""')}"`; download(`depenses-${today()}.csv`, '﻿' + ['date;montant_fcfa;categorie;note', ...[...S.expenses].sort((a, b) => a.date.localeCompare(b.date)).map(e => [e.date, e.amount, q((catOf(e.catId) || {}).name || ''), q(e.note || '')].join(';'))].join('\r\n'), 'text/csv;charset=utf-8'); },
   import: () => $('#importFile').click(),
@@ -1983,7 +1949,6 @@ document.addEventListener('input', e => {
   const t = e.target;
   if (t.name === 'amount') { const n = parseAmt(t.value); t.value = n ? num(n) : ''; }
   if (t.closest('form[data-form=add]')) UI.draft[t.name] = t.value;
-  if (t.hasAttribute && t.hasAttribute('data-jkvol')) JK.setVolume(+t.value / 100);
   if (t.dataset.bud != null) { // les budgets : on formate, on recompte le total, on signale ce qui n'est pas encore validé
     const n = parseAmt(t.value); t.value = n || t.value === '' ? num(n) : '';
     const f = t.form, ins = [...f.querySelectorAll('[data-bud]')]; let total = 0, changed = 0;
@@ -2025,7 +1990,6 @@ document.addEventListener('submit', e => {
     for (const c of S.categories) { const val = parseAmt(v('b_' + c.id)); if (val !== getBudget(ym, c)) changed++; row[c.id] = val; }
     SFX.coin(); toast(changed ? 'Budgets enregistrés' : 'Rien à changer', changed ? `${changed} catégorie${changed > 1 ? 's' : ''} · total ${fmt(totalBudget(ym))} pour ${ymLabel(ym)} et les mois suivants.` : `Les budgets de ${ymLabel(ym)} sont déjà à jour.`); commit();
   }
-  else if (k === 'jk') { const wasEmpty = !S.jukebox.list.length, err = JK.add(v('link')); UI.jkErr = err || ''; if (err) { SFX.hit(); return renderUI(); } SFX.coin(); renderUI(); if (wasEmpty) JK.play(0, true); }
   else if (k === 'cash') { const c = v('amount'); S.startCash = c.trim() ? parseAmt(c) : null; S.startDate = v('date') || today(); SFX.coin(); commit(); }
 });
 function welcome(step) { // l'accueil : choisir son personnage, puis son nom et sa trésorerie de départ
@@ -2057,84 +2021,12 @@ function welcome(step) { // l'accueil : choisir son personnage, puis son nom et 
     if (e.key === 'ArrowDown') { e.preventDefault(); UI.menuIdx = (UI.menuIdx + 1) % items.length; SFX.click(); renderUI(); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); UI.menuIdx = (UI.menuIdx - 1 + items.length) % items.length; SFX.click(); renderUI(); }
     else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); chooseMenu(UI.menuIdx); }
-    else if (e.key === 'j' || e.key === 'J') { e.preventDefault(); if (S.jukebox.list.length) JK.toggle(); else openPlace('home', 'music'); }
     else if (e.key === 'Escape' || e.key === 'Backspace') { if (UI.place) { e.preventDefault(); closePlace(); } }
     else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); SCENE.target = null; UI.keyScroll = e.key === 'ArrowLeft' ? -1 : 1; }
     else if ((e.key === 'PageUp' || e.key === 'PageDown') && document.querySelector('#panel .monthbar')) { e.preventDefault(); UI.viewYM = addMonths(UI.viewYM, e.key === 'PageUp' ? -1 : 1); UI.selDay = null; SFX.click(); renderUI(); }
   });
   document.addEventListener('keyup', e => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') UI.keyScroll = 0; });
 })();
-
-/* ---- Le jukebox, comme dans l'Open Space : tes liens YouTube, lus par le lecteur officiel (youtube-nocookie.com, sans
-   cookie publicitaire) et pilotés par messages, sans script externe. Lecture, pause, précédent, suivant, boucle (liste ou
-   morceau), aléatoire, volume. Le petit robot du jukebox vole en bas à gauche de la scène tant que la musique joue. ---- */
-const YT_ORIGIN = 'https://www.youtube-nocookie.com';
-function youtubeId(raw) {
-  const s = String(raw || '').trim(); if (/^[\w-]{11}$/.test(s)) return s;
-  let u; try { u = new URL(/^https?:\/\//i.test(s) ? s : `https://${s}`); } catch (e) { return null; }
-  const host = u.hostname.replace(/^(www|m|music)\./, ''); let id = null;
-  if (host === 'youtu.be') id = u.pathname.split('/')[1] || null;
-  else if (host === 'youtube.com' || host === 'youtube-nocookie.com') { id = u.searchParams.get('v'); const m = u.pathname.match(/^\/(?:embed|shorts|live|v)\/([\w-]{11})/); if (!id && m) id = m[1]; }
-  return id && /^[\w-]{11}$/.test(id) ? id : null;
-}
-const JK = {
-  index: 0, playing: false, loaded: false, error: '', frame: null, ready: false, queued: [],
-  get list() { return S.jukebox.list; }, get current() { return this.list[this.index] || null; },
-  publish() { const b = $('#musicBtn'); if (b) b.classList.toggle('on', this.playing || MUSIC.on); const d = $('#jkDock'); if (d) { d.classList.toggle('shown', this.loaded); d.classList.toggle('playing', this.playing); const bot = d.querySelector('.dock-bot'); if (bot) bot.title = `♪ ${this.current ? this.current.title : ''} · ouvrir le jukebox`; } if (UI.place === 'home' && UI.sub === 'music') renderUI(); },
-  keep() { save(true); },
-  post(func, args = []) { if (!this.frame || !this.frame.contentWindow || !this.ready) { this.queued.push([func, args]); return; } this.frame.contentWindow.postMessage(JSON.stringify({event: 'command', func, args}), YT_ORIGIN); },
-  applyVolume() { this.post('setVolume', [Math.round(S.jukebox.volume * 100)]); },
-  open(id) {
-    this.error = '';
-    if (!this.frame) {
-      const f = document.createElement('iframe'); f.title = 'Le jukebox (YouTube)'; f.allow = 'autoplay; encrypted-media; picture-in-picture'; f.referrerPolicy = 'strict-origin-when-cross-origin';
-      f.src = `${YT_ORIGIN}/embed/${id}?enablejsapi=1&autoplay=1&playsinline=1&rel=0&origin=${encodeURIComponent(location.origin)}`;
-      f.addEventListener('load', () => { f.contentWindow && f.contentWindow.postMessage(JSON.stringify({event: 'listening', id: 'openquest', channel: 'widget'}), YT_ORIGIN); this.ready = true; this.applyVolume(); const q = this.queued; this.queued = []; for (const [fn, a] of q) this.post(fn, a); });
-      this.frame = f; $('#jkScreen').appendChild(f);
-    } else this.post('loadVideoById', [id]);
-    this.loaded = true;
-  },
-  onMessage(e) {
-    if (e.origin !== YT_ORIGIN || !this.frame || e.source !== this.frame.contentWindow) return;
-    let d; try { d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch (err) { return; } if (!d || typeof d !== 'object') return;
-    if (d.event === 'onReady') { this.ready = true; this.applyVolume(); return; }
-    if (d.event === 'onError') return this.fail();
-    const info = d.info, state = typeof info === 'number' && d.event === 'onStateChange' ? info : info && typeof info === 'object' ? info.playerState : undefined;
-    if (info && typeof info === 'object' && info.videoData && info.videoData.title) { const t = this.list.find(x => x.id === info.videoData.video_id) || this.current; if (t && t.title !== info.videoData.title && (/^Vidéo /.test(t.title) || t.title === "La musique d'OpenQuest")) { t.title = info.videoData.title; this.keep(); this.publish(); } }
-    if (state === undefined) return;
-    if (state === 0) this.ended(); else if (state === 1 && !this.playing) { this.playing = true; this.publish(); } else if (state === 2 && this.playing) { this.playing = false; this.publish(); }
-  },
-  fail() { this.error = "Cette vidéo ne peut pas être lue hors de YouTube (son auteur l'interdit). Je passe à la suivante."; this.publish(); if (this.list.length > 1) setTimeout(() => this.next(), 1500); else { this.playing = false; this.publish(); } },
-  ended() { const j = S.jukebox; if (j.repeat === 'one') { this.post('seekTo', [0, true]); this.post('playVideo'); return; } if (this.index >= this.list.length - 1 && j.repeat === 'off' && !j.shuffle) { this.playing = false; this.publish(); return; } this.next(); },
-  add(raw) { const id = youtubeId(raw); if (!id) return 'Ce lien ne ressemble pas à une vidéo YouTube. Colle par exemple : https://www.youtube.com/watch?v=…'; if (this.list.some(t => t.id === id)) return 'Cette vidéo est déjà dans la liste.'; this.list.push({id, title: `Vidéo ${id}`}); if (this.list.length > 60) this.list.shift(); this.keep(); return null; },
-  remove(i) { if (i < 0 || i >= this.list.length) return; const cur = i === this.index; this.list.splice(i, 1); if (i < this.index) this.index--; this.keep(); if (!this.list.length) return this.stop(); if (cur) { this.index = Math.min(this.index, this.list.length - 1); if (this.playing) this.play(this.index, true); } this.publish(); },
-  play(index = this.index, force) {
-    if (!this.list.length) return openPlace('home', 'music');
-    if (MUSIC.on) toggleMusic(false); // le jukebox remplace l'air en 8 bits
-    const i = ((index % this.list.length) + this.list.length) % this.list.length, change = force || i !== this.index || !this.loaded;
-    this.index = i; if (change) this.open(this.list[i].id); this.post('playVideo'); this.playing = true; this.publish();
-  },
-  pause() { this.post('pauseVideo'); this.playing = false; this.publish(); },
-  stop() { if (this.frame) this.frame.remove(); this.frame = null; this.ready = false; this.queued = []; this.loaded = false; this.playing = false; this.publish(); },
-  toggle() { if (this.playing) this.pause(); else this.play(); },
-  next() { if (!this.list.length) return; if (S.jukebox.shuffle && this.list.length > 1) { let n = this.index; while (n === this.index) n = Math.floor(Math.random() * this.list.length); this.play(n); } else this.play(this.index + 1); },
-  prev() { this.play(this.index - 1); },
-  cycleRepeat() { const j = S.jukebox; j.repeat = j.repeat === 'off' ? 'all' : j.repeat === 'all' ? 'one' : 'off'; this.keep(); this.publish(); },
-  toggleShuffle() { S.jukebox.shuffle = !S.jukebox.shuffle; this.keep(); this.publish(); },
-  setVolume(v) { S.jukebox.volume = clamp(v, 0, 1); this.applyVolume(); save(false); },
-};
-addEventListener('message', e => JK.onMessage(e));
-const JK_REPEAT = {off: ['➡', 'Sans boucle'], all: ['🔁', 'En boucle : la liste'], one: ['🔂', 'En boucle : ce morceau']};
-function jukeboxPanel() {
-  const j = S.jukebox, L = j.list;
-  return `<div class="row between"><span class="gold">LE JUKEBOX</span><small class="dim">${L.length ? `${L.length} morceau${L.length > 1 ? 'x' : ''} · ${JK_REPEAT[j.repeat][1].toLowerCase()}` : 'Colle tes liens YouTube'}</small></div>
-    <form data-form="jk" class="row" autocomplete="off"><input name="link" class="grow" placeholder="Lien YouTube (https://www.youtube.com/watch?v=…)"><button class="ffbtn sm">Ajouter</button></form>
-    ${UI.jkErr ? `<p class="red">${esc(UI.jkErr)}</p>` : ''}${JK.error ? `<p class="red">${esc(JK.error)}</p>` : ''}
-    <div class="jk-controls"><button class="ffbtn sm" data-act="jkPrev" title="Morceau précédent" ${L.length ? '' : 'disabled'}>⏮</button><button class="ffbtn sm jk-play" data-act="jkToggle" title="${JK.playing ? 'Pause (J)' : 'Lecture (J)'}" ${L.length ? '' : 'disabled'}>${JK.playing ? '⏸' : '▶'}</button><button class="ffbtn sm" data-act="jkNext" title="Morceau suivant" ${L.length ? '' : 'disabled'}>⏭</button><button class="ffbtn sm ${j.repeat !== 'off' ? 'on' : ''}" data-act="jkRepeat" title="${JK_REPEAT[j.repeat][1]}">${JK_REPEAT[j.repeat][0]}</button><button class="ffbtn sm ${j.shuffle ? 'on' : ''}" data-act="jkShuffle" title="Lecture aléatoire : ${j.shuffle ? 'oui' : 'non'}">🔀</button><label class="jk-vol" title="Volume">🔈<input type="range" min="0" max="100" value="${Math.round(j.volume * 100)}" data-jkvol></label></div>
-    ${L.length ? `<ol class="jk-list">${L.map((t, i) => `<li class="${i === JK.index && JK.loaded ? 'on' : ''}"><button class="li jk-track" data-act="jkPlay" data-i="${i}"><span class="jk-num">${i === JK.index && JK.playing ? '♪' : i + 1}</span><span class="grow">${esc(t.title)}</span></button><button class="x" data-act="jkDel" data-i="${i}" aria-label="Retirer">×</button></li>`).join('')}</ol>` : '<p class="dim">La liste est vide. Copie l\'adresse d\'une vidéo ou d\'une musique sur YouTube, colle-la ici, puis « Ajouter ».</p>'}
-    <p class="dim">La musique vient de youtube-nocookie.com, sans cookie publicitaire. Ta liste te suit sur tes appareils, avec le reste de tes données. Raccourci : <b>J</b> pour lecture ou pause.</p>
-    ${JK.loaded ? '<button class="ffbtn full" data-act="jkStop">Éteindre le jukebox</button>' : ''}`;
-}
 
 /* ---- La musique : un petit air de village en 8 bits, composé ici ---- */
 const MUSIC = {on: false, timer: null, next: 0, step: 0};
@@ -2156,11 +2048,10 @@ function scheduleMusic() {
 }
 function toggleMusic(force) {
   MUSIC.on = force ?? !MUSIC.on; MUSIC.wanted = MUSIC.on;
-  if (MUSIC.on && JK.playing) JK.pause();
   try { localStorage.setItem(STORE_KEY + '.music', MUSIC.on ? '1' : '0'); } catch (e) {}
   if (MUSIC.on) { AC = AC || new (window.AudioContext || window.webkitAudioContext)(); AC.resume && AC.resume(); MUSIC.next = AC.currentTime + .05; MUSIC.timer = setInterval(scheduleMusic, 60); }
   else clearInterval(MUSIC.timer);
-  const b = $('#musicBtn'); if (b) b.classList.toggle('on', MUSIC.on || JK.playing);
+  const b = $('#musicBtn'); if (b) b.classList.toggle('on', MUSIC.on);
 }
 function fanfare() { beep([[523, .12, 0], [659, .12, .12], [784, .12, .24], [1047, .25, .36], [988, .12, .62], [1047, .5, .74]]); }
 
