@@ -182,7 +182,13 @@ Apprenti (1), Habitant (2), Écuyer (3), Chevalier (5), Gardien du Trésor (7), 
 
 ## Son
 
-- Une petite musique en 8 bits, composée et générée dans le navigateur. Elle est coupée au départ : bouton **♪ MUSIQUE** sous l'écran, ou Config → Héros.
+- **Le jukebox**, comme dans l'Open Space : Config › Jukebox. Colle un lien YouTube, puis « Ajouter » ; le premier morceau ajouté démarre aussitôt.
+  - Lecture et pause, précédent, suivant, boucle (sur la liste ou sur un morceau), lecture aléatoire, volume. Raccourci : **J**.
+  - Le bouton **♪ MUSIQUE** sous l'écran lance ou met en pause le jukebox.
+  - Pendant la lecture, le petit robot du jukebox vole en bas à gauche de la scène, des notes plein la tête ; un clic ouvre le jukebox.
+  - La liste démarre avec la musique d'OpenQuest. Elle fait partie de tes données : elle te suit sur tes appareils grâce au coffre en ligne.
+  - Les vidéos sont lues par le lecteur officiel de YouTube (youtube-nocookie.com, sans cookie publicitaire). Une vidéo dont l'auteur interdit la lecture hors de YouTube est sautée.
+- **L'air en 8 bits** de la cité reste disponible (Config › Héros). Il s'arrête quand le jukebox joue, et inversement.
 - Un bip à chaque choix de menu et pendant que le texte s'écrit, et une fanfare aux montées de niveau.
 
 ## Règles
