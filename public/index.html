@@ -87,6 +87,11 @@ body.open .ui{height:56%}
 button.li{cursor:pointer} button.li:hover{background:rgba(255,255,255,.08)}
 .li.off{opacity:.55} .li.sel{outline:2px solid var(--gold)}
 .li small{font-size:16px}
+.choices{display:flex;flex-direction:column;gap:2px;margin:4px 0}
+.choices label{display:flex;align-items:center;gap:8px;padding:3px 6px;border-radius:3px;cursor:pointer;background:rgba(0,0,20,.25)}
+.choices input{accent-color:#ffd166;width:16px;height:16px;margin:0}
+.choices label:has(input:checked){outline:2px solid var(--gold);outline-offset:-2px}
+.rf-dir{font-size:20px;width:18px;text-align:center}
 .li.chg{outline:2px solid var(--gold);outline-offset:-2px}
 #budOk{position:sticky;bottom:0;margin-top:8px;box-shadow:0 0 0 1px #06061a,0 -6px 10px rgba(6,6,26,.6)}
 .li.chg input{color:var(--gold)}
@@ -801,6 +806,7 @@ function defaultState() {
   return {
     version: 1, createdAt: today(), heroName: '', sound: true, lastLevel: 1, seenAch: [], lastCat: 'alim',
     startCash: null, startDate: today(), incomes: [], // trésorerie de départ et rentrées d'argent
+    refunds: [],          // remboursements, hors budget : { id, dir: 'owed' (on me doit) | 'owe' (je dois), how, who, amount, date, note, pays: [{id, date, amount}] }
     world: defaultWorld(),
     categories: [
       {id:'alim',   name:'Alimentation', monster:'slime',    color:'vert',   budget:60000},
@@ -831,7 +837,7 @@ function defaultState() {
 function migrate(s) {
   const d = defaultState();
   for (const k of Object.keys(d)) if (s[k] === undefined) s[k] = d[k];
-  for (const k of ['categories','expenses','habits','trackers','seenAch','incomes']) if (!Array.isArray(s[k])) s[k] = d[k];
+  for (const k of ['categories','expenses','habits','trackers','seenAch','incomes','refunds']) if (!Array.isArray(s[k])) s[k] = d[k];
   if (s.startCash != null && !isFinite(+s.startCash)) s.startCash = null;
   if (typeof s.startDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s.startDate)) s.startDate = s.createdAt || today();
   for (const k of ['budgets','checkins','habitLog','trackerLog']) if (!s[k] || typeof s[k] !== 'object' || Array.isArray(s[k])) s[k] = {};
@@ -851,6 +857,8 @@ function migrate(s) {
     if (ACCS[ol.acc]) nl[ACCS[ol.acc].slot] = ol.acc;
   } else for (const k of Object.keys(DEFAULT_LOOK)) { const v = ol[k]; if (v == null) continue; if ((k === 'eyes' && LOOK_EYES[v]) || (k === 'cape' && LOOK_CAPE[v]) || (k === 'body' && LOOK_BODY[v]) || (ACCS[v] && ACCS[v].slot === k)) nl[k] = v; }
   s.world.look = nl;
+  const okDate = d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d), amt = v => Math.max(0, Math.round(+v || 0));
+  s.refunds = s.refunds.filter(r => r && okDate(r.date) && ['owed', 'owe'].includes(r.dir)).map(r => ({...r, amount: amt(r.amount), how: r.how === 'cash' ? 'cash' : 'paid', pays: (Array.isArray(r.pays) ? r.pays : []).filter(x => x && okDate(x.date)).map(x => ({...x, amount: amt(x.amount)}))}));
   s.incomes = s.incomes.filter(e => e && typeof e.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(e.date)).map(e => ({...e, amount: Math.max(0, Math.round(+e.amount || 0))}));
   s.expenses = s.expenses.filter(e => e && typeof e.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(e.date)).map(e => ({...e, amount: Math.max(0, Math.round(+e.amount || 0))}));
   return s;
@@ -1053,12 +1061,20 @@ function computeGame() {
   // la trésorerie : ce qu'il y avait au départ, plus les rentrées, moins les dépenses depuis
   const sd = S.startDate || S.createdAt || t;
   const inc = S.incomes.filter(e => e.date >= sd).reduce((a, e) => a + e.amount, 0), out = S.expenses.filter(e => e.date >= sd).reduce((a, e) => a + e.amount, 0);
-  const cash = S.startCash == null ? null : S.startCash + inc - out;
+  // les remboursements passent par la trésorerie, jamais par les dépenses : le budget du jour n'en sait rien
+  let refundNet = 0, owedOpen = 0, oweOpen = 0;
+  for (const r of S.refunds) {
+    const paid = r.pays.reduce((a, x) => a + x.amount, 0), rest = Math.max(0, r.amount - paid), sign = r.dir === 'owed' ? 1 : -1;
+    if (r.date >= sd && (r.dir === 'owed' || r.how === 'cash')) refundNet -= sign * r.amount; // l'avance sort ; le prêt reçu entre
+    for (const x of r.pays) if (x.date >= sd) refundNet += sign * x.amount;                   // le remboursement revient ; ou repart
+    if (r.dir === 'owed') owedOpen += rest; else oweOpen += rest;
+  }
+  const cash = S.startCash == null ? null : S.startCash + inc - out + refundNet;
   const o = byDate.get(t), todaySum = o ? o.sum : 0, checkedToday = byDate.has(t) || !!S.checkins[t];
   const buildToday = checkedToday && todaySum <= ms.todayAllowance;
   const g = {xp, level, xpIn: xp - base, xpNext: xpNeed(level), streak, best, victories, zeroDays, checkDays, nExp: S.expenses.length,
     nChests, buildDays, buildToday, builtNow: buildDays, built: buildDays, combo: comboOf(streak), bestCombo, xpToday, todayParts,
-    nHabit, nTrack, hp, treasure: savings, savings, cash, inc, out, underMonths, perfectMonths, ms, checkedToday};
+    nHabit, nTrack, hp, treasure: savings, savings, cash, inc, out, refundNet, owedOpen, oweOpen, underMonths, perfectMonths, ms, checkedToday};
   g.unlocked = ACH.filter(a => a.test(g)).map(a => a.id);
   return g;
 }
@@ -1625,7 +1641,7 @@ function drawScene(now) {
 const UI = {place: null, sub: null, menuIdx: 0, viewYM: ymOf(today()), selDay: null, draft: {amount: '', note: '', date: ''}, pickCat: null, game: null, keyScroll: 0, focusAt: 0, trackerDate: today(), tipIdx: 0};
 const MAIN_MENU = [['market', 'Dépense'], ['bank', 'Écarts'], ['archives', 'Journal'], ['board', 'Quêtes'], ['lab', 'Suivis'], ['home', 'Config']];
 const SUBMENUS = {
-  market:   [['add', 'Noter'], ['income', 'Rentrée'], ['zero', 'Jour zéro'], ['recent', 'Récentes'], ['back', 'Retour']],
+  market:   [['add', 'Noter'], ['income', 'Rentrée'], ['refund', 'Rembours.'], ['zero', 'Jour zéro'], ['recent', 'Récentes'], ['back', 'Retour']],
   bank:     [['bilan', 'Bilan'], ['cats', 'Catégories'], ['daily', 'Par jour'], ['top', 'Top'], ['back', 'Retour']],
   archives: [['cal', 'Calendrier'], ['list', 'Liste'], ['back', 'Retour']],
   board:    [['today', 'Du jour'], ['week', 'Semaine'], ['progress', 'Progrès'], ['trophies', 'Trophées'], ['newq', '+ Quête'], ['back', 'Retour']],
@@ -1695,7 +1711,7 @@ function heroLine(g) {
 function panelHTML(g) {
   const p = UI.place, s = UI.sub, ms = g.ms;
   if (!p) return idlePanel(g);
-  if (p === 'market') return s === 'recent' ? recentPanel() : s === 'zero' ? zeroPanel() : s === 'income' ? incomePanel() : addPanel();
+  if (p === 'market') return s === 'recent' ? recentPanel() : s === 'zero' ? zeroPanel() : s === 'income' ? incomePanel() : s === 'refund' ? refundPanel(g) : addPanel();
   if (p === 'bank') return bankPanel(s || 'bilan');
   if (p === 'archives') return s === 'list' ? listPanel() : calPanel();
   if (p === 'board') return s === 'week' ? weekPanel() : s === 'trophies' ? trophyPanel(g) : s === 'progress' ? progressPanel(g) : s === 'newq' ? newQuestPanel() : todayQuests();
@@ -1779,12 +1795,36 @@ function incomePanel() {
 function charPanel() { // choisir son personnage : l'équipe de l'Open Space, et les nouveaux venus de la cité
   return `<p class="dim">Ton niveau, tes accessoires et tes tenues te suivent quel que soit le personnage.</p><div class="chars">${CHAR_ORDER.map(k => `<button class="charc ${heroChar() === k ? 'on' : ''}" data-act="pickChar" data-k="${k}">${robotImg(k, CHARS[k].outfit, 44)}<b>${esc(CHARS[k].name)}</b><small>${esc(CHARS[k].archetype)}</small>${CHARS[k].isNew ? '<i class="new">NOUVEAU</i>' : ''}</button>`).join('')}</div>`;
 }
+const refundRest = r => Math.max(0, r.amount - r.pays.reduce((a, x) => a + x.amount, 0));
+function refundRow(r) {
+  const rest = refundRest(r), owed = r.dir === 'owed', done = rest === 0;
+  return `<div class="li ${done ? 'off' : ''}"><span class="rf-dir ${owed ? 'green' : 'red'}" title="${owed ? 'On me doit' : 'Je dois'}">${owed ? '↙' : '↗'}</span><span class="grow">${esc(r.who)}${r.note ? ` · ${esc(r.note)}` : ''}<br><small class="dim">${owed ? 'avancé' : r.how === 'cash' ? 'prêté' : 'payé pour moi'} le ${dayLabel(r.date)}${r.pays.length ? ` · ${done ? 'réglé' : `${fmt(r.amount - rest)} déjà rendus`}` : ''}</small></span><b class="${done ? 'dim' : owed ? 'green' : 'red'}">${fmt(done ? r.amount : rest)}</b>${done ? '' : `<button class="ffbtn sm" data-act="refundPay" data-id="${r.id}" title="${owed ? 'Marquer remboursé' : "J'ai remboursé"}">✓</button>`}<button class="x" data-act="delRefund" data-id="${r.id}" aria-label="Supprimer">×</button></div>`;
+}
+function refundPanel(g) { // les remboursements : hors budget, ils ne passent que par la trésorerie
+  const open = S.refunds.filter(r => refundRest(r) > 0).sort((a, b) => a.date.localeCompare(b.date)), done = S.refunds.filter(r => refundRest(r) === 0).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
+  return `<div class="kv"><span>On te doit</span><b class="green">${fmt(g.owedOpen)}</b><span>Tu dois</span><b class="${g.oweOpen ? 'red' : ''}">${fmt(g.oweOpen)}</b></div>
+    <p class="dim">Hors budget : seule la trésorerie bouge.</p>
+    <form data-form="refund" autocomplete="off"><div class="choices">
+      <label><input type="radio" name="kind" value="owed" checked><span>J'ai avancé de l'argent <small class="dim">(on me doit)</small></span></label>
+      <label><input type="radio" name="kind" value="owe-paid"><span>On a payé à ma place <small class="dim">(je dois)</small></span></label>
+      <label><input type="radio" name="kind" value="owe-cash"><span>On m'a prêté de l'argent <small class="dim">(je dois)</small></span></label></div>
+      <input name="who" class="full" placeholder="Qui ? (Awa, le bureau…)" maxlength="40" required>
+      <div class="row"><input class="amount" name="amount" inputmode="numeric" placeholder="0" aria-label="Montant"><span class="gold">F</span></div>
+      <input name="note" class="full" placeholder="Pour quoi ? (déjeuner, taxi…)" maxlength="60">
+      <div class="row"><input type="date" name="date" class="grow" value="${today()}"><button class="ffbtn">Ajouter</button></div></form>
+    <div class="gold">EN ATTENTE</div>${open.length ? `<div class="list">${open.map(refundRow).join('')}</div>` : '<p class="dim">Rien en attente.</p>'}
+    ${done.length ? `<div class="gold">RÉGLÉS</div><div class="list">${done.map(refundRow).join('')}</div>` : ''}`;
+}
+function refundPay(id) {
+  const r = S.refunds.find(x => x.id === id); if (!r) return; const rest = refundRest(r), owed = r.dir === 'owed';
+  modal(`<div class="gold">${owed ? `${esc(r.who.toUpperCase())} TE REMBOURSE` : `TU REMBOURSES ${esc(r.who.toUpperCase())}`}</div><p class="dim">Il reste ${fmt(rest)} sur ${fmt(r.amount)}. Un remboursement partiel est possible.</p><form data-form="refundPay" data-id="${r.id}" autocomplete="off"><div class="row"><input name="amount" class="amount" inputmode="numeric" value="${num(rest)}"><span class="gold">F</span></div><input name="date" type="date" class="full" value="${today()}"><div class="row"><button class="ffbtn grow">OK</button><button type="button" class="ffbtn" data-act="closeModal">Annuler</button></div></form>`);
+}
 function cashPanel(g) {
   const ms = g.ms, inc = [...S.incomes].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8);
   return `<div class="row between"><span class="gold">TRÉSORERIE</span><b class="big ${g.cash != null && g.cash < 0 ? 'red' : ''}">${g.cash == null ? '—' : fmt(g.cash)}</b></div>
     <form data-form="cash" class="col"><label class="dim">Trésorerie de départ</label><div class="row"><input name="amount" class="amount" inputmode="numeric" value="${S.startCash == null ? '' : num(S.startCash)}" placeholder="0"><span class="gold">F</span></div>
     <div class="row"><span class="dim">au</span><input type="date" name="date" class="grow" value="${esc(S.startDate || today())}"><button class="ffbtn">OK</button></div></form>
-    ${g.cash != null ? `<div class="kv"><span>Départ</span><b>${fmt(S.startCash)}</b><span>+ Rentrées</span><b class="green">${fmt(g.inc)}</b><span>− Dépenses</span><b class="red">${fmt(g.out)}</b><span>Fin du mois (si le budget est tenu)</span><b>${fmt(g.cash - Math.max(0, ms.remaining))}</b></div>` : '<p class="dim">Indique combien tu as aujourd\'hui : la trésorerie suivra tes dépenses et tes rentrées.</p>'}
+    ${g.cash != null ? `<div class="kv"><span>Départ</span><b>${fmt(S.startCash)}</b><span>+ Rentrées</span><b class="green">${fmt(g.inc)}</b><span>− Dépenses</span><b class="red">${fmt(g.out)}</b>${g.refundNet ? `<span>${g.refundNet > 0 ? '+' : '−'} Remboursements</span><b class="${g.refundNet > 0 ? 'green' : 'red'}">${fmt(Math.abs(g.refundNet))}</b>` : ''}${g.owedOpen ? `<span>On te doit encore</span><b class="green">${fmt(g.owedOpen)}</b>` : ''}${g.oweOpen ? `<span>Tu dois encore</span><b class="red">${fmt(g.oweOpen)}</b>` : ''}<span>Fin du mois (si le budget est tenu)</span><b>${fmt(g.cash - Math.max(0, ms.remaining))}</b></div>` : '<p class="dim">Indique combien tu as aujourd\'hui : la trésorerie suivra tes dépenses et tes rentrées.</p>'}
     <div class="gold">RENTRÉES</div>${inc.length ? `<div class="list">${inc.map(e => `<div class="li"><span class="grow">${esc(e.note || 'Rentrée')}<br><small class="dim">${dayLabel(e.date)}</small></span><span class="green">+${fmt(e.amount)}</span><button class="x" data-act="delIncome" data-id="${e.id}" aria-label="Supprimer">×</button></div>`).join('')}</div>` : '<p class="dim">Aucune. Marché › Rentrée pour en ajouter.</p>'}`;
 }
 function lookPanel(g) { // l'apparence : les couleurs, et les accessoires gagnés avec les niveaux
@@ -1807,7 +1847,7 @@ function homePanel(s, g) {
   if (s === 'cash') return cashPanel(g);
   if (s === 'skins') return `<div class="list">${Object.entries(SKINS).map(([k, sk]) => { const on = S.world.skins.includes(k), src = CHESTS.find(c => c.skin === k); return `<button class="li ${on ? '' : 'off'} ${S.world.skin === k ? 'sel' : ''}" ${on ? `data-act="skin" data-id="${k}"` : 'disabled'}>${robotImg('hero|' + heroChar() + '|' + k + '|' + JSON.stringify(heroLook()), heroOutfitFor(k, heroLook(), heroChar()), 32, on ? {} : {grey: true})}<span class="grow">${on ? esc(sk.name) : '???'}<br><small class="dim">${on ? (S.world.skin === k ? 'Portée' : 'Toucher pour porter') : esc(src && src.cond ? 'À débloquer : ' + src.cond.txt : '')}</small></span></button>`; }).join('')}</div>`;
   if (s === 'save') return `${SYNC.on ? `<p>${SYNC.err ? '<span class="red">Coffre en ligne injoignable</span> : tes données sont gardées sur cet appareil et repartiront dès que possible.' : `<span class="green">Coffre en ligne actif</span> pour <b class="gold">${esc(accessName())}</b>${SYNC.last ? ` · à jour à ${new Date(SYNC.last).toTimeString().slice(0, 5)}` : ''}. Tes données te suivent sur tous tes appareils, avec le même nom à l'entrée.`}</p>` : `<p class="dim">Tes données restent sur cet appareil. Exporte-les pour les garder ou les transférer.</p>`}<div class="col gap"><button class="ffbtn" data-act="export">Exporter (JSON)</button><button class="ffbtn" data-act="csv">Exporter (CSV)</button><button class="ffbtn" data-act="import">Importer</button><button class="ffbtn red" data-act="reset">Tout effacer</button></div><input type="file" id="importFile" accept=".json,application/json" hidden>`;
-  if (s === 'rules') return `<p>Chaque catégorie a son budget du mois. Le <b class="gold">budget du jour</b> = ce qui reste ÷ jours restants.</p><p><b class="gold">XP par jour</b> : +10 journal tenu, +2 par dépense notée (5 max), +30 à +50 sous le budget du jour (plus tu restes loin de la limite, plus ça rapporte), +20 sans dépense, +15 par quête, +25 si toutes sont faites, +5 par mesure (+10 si l'objectif est atteint).</p><p><b class="gold">Combo</b> : chaque jour de série ajoute 4 % à l'XP du jour, jusqu'à ×2. Paliers : +150 XP à 7 et 14 jours, +500 à 30, 60 et 100.</p><p><b class="gold">Fin de mois</b> : +300 XP si le mois est sous le budget, +40 par catégorie tenue.</p><p><b class="gold">Niveaux</b> : chaque niveau demande 75 XP de plus que le précédent, et débloque souvent un accessoire.</p><p><b class="gold">La ville en contrebas</b> part de zéro : chaque jour terminé sous le budget du jour lui ajoute une construction (chemin, arbre, maison, puits, moulin, lac, église… jusqu'au royaume). Le chantier du jour apparaît dès que la journée est sur la bonne voie.</p><p><b class="gold">Météo</b> : soleil sous le budget du jour, nuages près de la limite, pluie au-delà, orage si une catégorie déborde.</p>`;
+  if (s === 'rules') return `<p>Chaque catégorie a son budget du mois. Le <b class="gold">budget du jour</b> = ce qui reste ÷ jours restants.</p><p><b class="gold">XP par jour</b> : +10 journal tenu, +2 par dépense notée (5 max), +30 à +50 sous le budget du jour (plus tu restes loin de la limite, plus ça rapporte), +20 sans dépense, +15 par quête, +25 si toutes sont faites, +5 par mesure (+10 si l'objectif est atteint).</p><p><b class="gold">Combo</b> : chaque jour de série ajoute 4 % à l'XP du jour, jusqu'à ×2. Paliers : +150 XP à 7 et 14 jours, +500 à 30, 60 et 100.</p><p><b class="gold">Fin de mois</b> : +300 XP si le mois est sous le budget, +40 par catégorie tenue.</p><p><b class="gold">Niveaux</b> : chaque niveau demande 75 XP de plus que le précédent, et débloque souvent un accessoire.</p><p><b class="gold">La ville en contrebas</b> part de zéro : chaque jour terminé sous le budget du jour lui ajoute une construction (chemin, arbre, maison, puits, moulin, lac, église… jusqu'au royaume). Le chantier du jour apparaît dès que la journée est sur la bonne voie.</p><p><b class="gold">Remboursements</b> (Marché › Rembours.) : une avance faite pour quelqu'un, ou ce que tu dois, passe par la trésorerie mais jamais par le budget : ni le budget du jour, ni l'XP, ni la ville ne bougent.</p><p><b class="gold">Météo</b> : soleil sous le budget du jour, nuages près de la limite, pluie au-delà, orage si une catégorie déborde.</p>`;
   return `<label class="dim">Nom du héros</label><input class="full" value="${esc(S.heroName)}" maxlength="20" data-chg="heroName" placeholder="${esc(CHARS[heroChar()].name)}"><div class="kv"><span>Niveau</span><b>${g.level} · ${titleFor(g.level)}</b><span>PV</span><b>${g.hp}/100</b><span>XP</span><b>${num(g.xpIn)}/${num(g.xpNext)}</b><span>Trésorerie</span><b>${g.cash == null ? '—' : fmt(g.cash)}</b></div>${accessName() ? `<p class="dim">Accès ouvert pour <b class="gold">${esc(accessName())}</b>.</p><a class="ffbtn full center" href="/sortie">Se déconnecter</a>` : ''}<div class="col gap"><button class="ffbtn" data-act="sound">Sons : ${S.sound ? 'oui' : 'non'}</button><button class="ffbtn" data-act="music">Musique : ${MUSIC.on ? 'oui' : 'non'}</button></div>`;
 }
 
@@ -1931,6 +1971,8 @@ const ACT = {
   pickChar: a => { if (!CHARS[a.dataset.k]) return; const was = heroChar(); S.world.hero = a.dataset.k; if (!S.heroName || S.heroName === CHARS[was].name) S.heroName = ''; SFX.quest(); commit(); },
   welcomeChar: a => { if (!CHARS[a.dataset.k]) return; S.world.hero = a.dataset.k; SFX.click(); welcome(2); },
   welcomeBack: () => { const c = $('#modalBox [name=cash]'); if (c) UI.welcomeCash = c.value; SFX.click(); welcome(); },
+  refundPay: a => refundPay(a.dataset.id),
+  delRefund: a => { const r = S.refunds.find(x => x.id === a.dataset.id); if (r && confirm(`Supprimer le remboursement « ${r.who} » de ${fmt(r.amount)} ?`)) { S.refunds = S.refunds.filter(x => x !== r); commit(); } },
   delIncome: a => { const e = S.incomes.find(x => x.id === a.dataset.id); if (e && confirm(`Supprimer la rentrée de ${fmt(e.amount)} ?`)) { S.incomes = S.incomes.filter(x => x !== e); commit(); } },
   goCash: () => openPlace('home', 'cash'),
   goProgress: () => openPlace('board', 'progress'),
@@ -1984,6 +2026,17 @@ document.addEventListener('submit', e => {
   else if (k === 'track') { const val = v('v'); if (val === '' || isNaN(+val)) return; const d = UI.trackerDate; S.trackerLog[d] = S.trackerLog[d] || {}; S.trackerLog[d][f.dataset.id] = +val; SFX.coin(); commit('Mesure enregistrée.'); }
   else if (k === 'cat') { const id = uid(), mons = Object.keys(MONS), cols = Object.keys(COLORS); S.categories.push({id, name: v('name').trim(), monster: mons[S.categories.length % mons.length], color: cols[S.categories.length % cols.length], budget: 0}); S.budgets[UI.viewYM] = S.budgets[UI.viewYM] || {}; S.budgets[UI.viewYM][id] = parseAmt(v('budget')); commit(); }
   else if (k === 'welcome') { S.onboarded = true; S.heroName = v('name').trim().slice(0, 20) || CHARS[heroChar()].name; const c = v('cash'); if (c.trim()) { S.startCash = parseAmt(c); S.startDate = today(); } UI.welcomeCash = ''; closeModal(); save(true); renderUI(); progress(UI.game, true); UI.dlg = idleDlg(); renderUI(); }
+  else if (k === 'refund') {
+    const amount = parseAmt(v('amount')), who = v('who').trim().slice(0, 40), kind = v('kind') || 'owed';
+    if (!who) { toast('Qui ?', 'Indique avec qui.'); return; } if (!amount) { toast('Montant ?', 'Indique le montant.'); return; }
+    S.refunds.push({id: uid(), dir: kind === 'owed' ? 'owed' : 'owe', how: kind === 'owe-cash' ? 'cash' : 'paid', who, amount, date: v('date') || today(), note: v('note').trim().slice(0, 60), pays: []});
+    SFX.coin(); toast('Remboursement noté', kind === 'owed' ? `${who} te doit ${fmt(amount)}. Ton budget du jour ne bouge pas.` : `Tu dois ${fmt(amount)} à ${who}. Ton budget du jour ne bouge pas.`); UI.sub = 'refund'; commit();
+  }
+  else if (k === 'refundPay') {
+    const r = S.refunds.find(x => x.id === f.dataset.id); if (!r) return; const amount = Math.min(parseAmt(v('amount')), refundRest(r)); if (!amount) return;
+    r.pays.push({id: uid(), date: v('date') || today(), amount}); closeModal(); SFX.quest();
+    toast(refundRest(r) ? 'Remboursement partiel' : 'Remboursement réglé', r.dir === 'owed' ? `+${fmt(amount)} dans la trésorerie.` : `−${fmt(amount)} de la trésorerie.`); commit();
+  }
   else if (k === 'income') { const amount = parseAmt(v('amount')); if (!amount) { toast('Montant ?', 'Indique combien tu as reçu.'); return; } S.incomes.push({id: uid(), date: v('date') || today(), amount, note: v('note').trim().slice(0, 60)}); SFX.coin(); toast('Rentrée notée', `+${fmt(amount)} dans la trésorerie.`); UI.sub = 'income'; commit(); }
   else if (k === 'budgets') { // valider les budgets du mois affiché
     const ym = UI.viewYM, row = S.budgets[ym] = S.budgets[ym] || {}; let changed = 0;

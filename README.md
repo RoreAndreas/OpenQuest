@@ -130,9 +130,23 @@ La barre d'état montre la trésorerie, les PV, le niveau avec sa jauge d'XP et 
 
 ## La trésorerie
 
-**Trésorerie = trésorerie de départ + rentrées − dépenses**, comptées depuis la date de départ.
+**Trésorerie = trésorerie de départ + rentrées − dépenses ± remboursements**, comptées depuis la date de départ.
 Config › Trésorerie montre le détail, les dernières rentrées, et ce qui restera à la fin du mois si le budget est tenu.
 
+
+## Les remboursements (hors budget)
+
+Marché › **Rembours.** garde la trace de l'argent avancé ou dû, **sans toucher au budget** : ni le budget du jour, ni l'XP, ni la météo, ni la ville en contrebas ne bougent. Seule la trésorerie suit.
+
+| Cas | À la saisie | Quand c'est réglé (✓) |
+|---|---|---|
+| **J'ai avancé de l'argent** (on me doit) | La trésorerie baisse | La trésorerie remonte |
+| **On a payé à ma place** (je dois) | Rien ne bouge | La trésorerie baisse |
+| **On m'a prêté de l'argent** (je dois) | La trésorerie monte | La trésorerie baisse |
+
+- Chaque ligne note qui, combien, pour quoi et quand. Les totaux « On te doit » et « Tu dois » sont en haut de l'écran.
+- Le bouton ✓ accepte un remboursement partiel : la ligne reste en attente jusqu'à ce que tout soit rendu.
+- Config › Trésorerie détaille l'effet des remboursements et ce qui reste dû dans un sens comme dans l'autre.
 ## L'XP : chaque jour compte
 
 | Ce qui rapporte, chaque jour | XP |
