@@ -116,6 +116,12 @@ button.li{cursor:pointer} button.li:hover{background:rgba(255,255,255,.08)}
 .choices input{accent-color:#ffd166;width:16px;height:16px;margin:0}
 .choices label:has(input:checked){outline:2px solid var(--gold);outline-offset:-2px}
 .rf-dir{font-size:20px;width:18px;text-align:center}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:0 0 8px}
+.seg button{display:flex;flex-direction:column;align-items:center;padding:6px 4px;border-radius:4px;border:2px solid #4a5498;background:rgba(0,0,20,.3);cursor:pointer;font-size:19px;text-shadow:inherit}
+.seg button small{font-size:15px;color:var(--dim)}
+.seg button.on{border-color:var(--gold);color:var(--gold);background:rgba(255,209,102,.1)}
+.flowform:has(input[value=save]:checked) .f-who,.flowform:has(input[value=withdraw]:checked) .f-who{display:none}
+.flowform:has(input[value=gift]:checked) .f-cash,.flowform:has(input[value=save]:checked) .f-cash,.flowform:has(input[value=withdraw]:checked) .f-cash,.flowform:has(input[value=owe-paid]:checked) .f-cash{display:none}
 .check{display:flex;align-items:center;gap:8px;margin:4px 0;cursor:pointer}.check input{accent-color:#ffd166;width:16px;height:16px;margin:0;flex:none}
 .li.chg{outline:2px solid var(--gold);outline-offset:-2px}
 #budOk{position:sticky;bottom:0;margin-top:8px;box-shadow:0 0 0 1px #06061a,0 -6px 10px rgba(6,6,26,.6)}
@@ -841,6 +847,8 @@ const heroImg = (size = 48, opt = {}) => robotImg(heroKey(), heroOutfit(), size,
 
 
 /* ---------------- STATE ---------------- */
+// Les catégories de rentrées
+const INCOME_CATS = {salaire: 'Salaire', prime: 'Prime', vente: 'Vente', cadeau: 'Cadeau reçu', autre: 'Autre'};
 function defaultState() {
   return {
     version: 1, createdAt: today(), heroName: '', sound: true, lastLevel: 1, seenAch: [], lastCat: 'alim',
@@ -848,7 +856,8 @@ function defaultState() {
     oldHabits: [],        // les quêtes supprimées : on les garde pour que leur XP reste acquise
     wishes: [],           // la wishlist : { id, name, price, catId, month: 'YYYY-MM', note, bought: null | {date, amount, expId} }
     expectedIncome: null, // revenu mensuel prévu, pour les prévisions
-    refunds: [],          // remboursements, hors budget : { id, dir: 'owed' (on me doit) | 'owe' (je dois), how, who, amount, date, note, pays: [{id, date, amount}] }
+    refunds: [],
+    flows: [],            // les autres flux hors budget : { id, kind: 'gift' (don fait) | 'save' (mis de côté) | 'withdraw' (retiré de l'épargne), amount, date, who, note }          // remboursements, hors budget : { id, dir: 'owed' (on me doit) | 'owe' (je dois), how, who, amount, date, note, pays: [{id, date, amount}] }
     world: defaultWorld(),
     categories: [
       {id:'alim',   name:'Alimentation', monster:'slime',    color:'vert',   budget:60000},
@@ -879,7 +888,7 @@ function defaultState() {
 function migrate(s) {
   const d = defaultState();
   for (const k of Object.keys(d)) if (s[k] === undefined) s[k] = d[k];
-  for (const k of ['categories','expenses','habits','trackers','seenAch','incomes','refunds','wishes','oldHabits']) if (!Array.isArray(s[k])) s[k] = d[k];
+  for (const k of ['categories','expenses','habits','trackers','seenAch','incomes','refunds','wishes','oldHabits','flows']) if (!Array.isArray(s[k])) s[k] = d[k];
   if (s.expectedIncome != null && !isFinite(+s.expectedIncome)) s.expectedIncome = null;
   if (s.startCash != null && !isFinite(+s.startCash)) s.startCash = null;
   if (typeof s.startDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s.startDate)) s.startDate = s.createdAt || today();
@@ -902,6 +911,8 @@ function migrate(s) {
   s.world.look = nl;
   const okDate = d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d), amt = v => Math.max(0, Math.round(+v || 0));
   s.wishes = s.wishes.filter(w => w && typeof w.name === 'string' && /^\d{4}-\d{2}$/.test(w.month)).map(w => ({...w, price: amt(w.price), bought: w.bought && okDate(w.bought.date) ? {...w.bought, amount: amt(w.bought.amount)} : null}));
+  s.flows = s.flows.filter(x => x && okDate(x.date) && ['gift', 'save', 'withdraw'].includes(x.kind)).map(x => ({...x, amount: amt(x.amount)}));
+  s.incomes.forEach(e => { if (!INCOME_CATS[e.cat]) e.cat = 'autre'; });
   s.refunds = s.refunds.filter(r => r && okDate(r.date) && ['owed', 'owe'].includes(r.dir)).map(r => ({...r, addCash: !!r.addCash, amount: amt(r.amount), how: r.how === 'cash' ? 'cash' : 'paid', pays: (Array.isArray(r.pays) ? r.pays : []).filter(x => x && okDate(x.date)).map(x => ({...x, amount: amt(x.amount)}))}));
   s.incomes = s.incomes.filter(e => e && typeof e.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(e.date)).map(e => ({...e, amount: Math.max(0, Math.round(+e.amount || 0))}));
   s.expenses = s.expenses.filter(e => e && typeof e.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(e.date)).map(e => ({...e, amount: Math.max(0, Math.round(+e.amount || 0))}));
@@ -970,7 +981,7 @@ const totalBudget = ym => S.categories.reduce((a, c) => a + getBudget(ym, c), 0)
 function expectedIncome() {
   if (S.expectedIncome != null) return S.expectedIncome;
   const ym0 = ymOf(today()), months = [1, 2, 3].map(k => addMonths(ym0, -k));
-  const tot = S.incomes.filter(e => months.includes(ymOf(e.date))).reduce((a, e) => a + e.amount, 0);
+  const tot = S.incomes.filter(e => e.cat !== 'cadeau' && months.includes(ymOf(e.date))).reduce((a, e) => a + e.amount, 0);
   return Math.round(tot / 3);
 }
 // La trésorerie mois par mois sur un an : + revenu prévu, − budgets (ou les envies, si elles dépassent leur budget)
@@ -1141,12 +1152,16 @@ function computeGame() {
     if (owed) owedOpen += rest; else oweOpen += rest;
   }
   const refundNet = loansIn - advancesOut + repaidIn - repaidOut, pendingNet = owedOpen - oweOpen;
-  const cash = S.startCash == null ? null : S.startCash + inc - out + refundNet, netCash = cash == null ? null : cash + pendingNet;
+  // les autres flux : dons faits et argent mis de côté sortent de la trésorerie, les retraits d'épargne y reviennent
+  let gifts = 0, saved = 0, withdrawn = 0, savingsBal = 0;
+  for (const x of S.flows) { const k = x.kind; if (k === 'save') savingsBal += x.amount; if (k === 'withdraw') savingsBal -= x.amount; if (x.date < sd) continue; if (k === 'gift') gifts += x.amount; else if (k === 'save') saved += x.amount; else withdrawn += x.amount; }
+  const flowNet = withdrawn - gifts - saved;
+  const cash = S.startCash == null ? null : S.startCash + inc - out + refundNet + flowNet, netCash = cash == null ? null : cash + pendingNet;
   const o = byDate.get(t), todaySum = o ? o.sum : 0, checkedToday = byDate.has(t) || !!S.checkins[t];
   const buildToday = checkedToday && todaySum <= ms.todayAllowance;
   const g = {xp, level, xpIn: xp - base, xpNext: xpNeed(level), streak, best, victories, zeroDays, checkDays, nExp: S.expenses.length,
     nChests, buildDays, buildToday, builtNow: buildDays, built: buildDays, combo: comboOf(streak), bestCombo, xpToday, todayParts,
-    nHabit, nTrack, hp, treasure: savings, savings, cash, netCash, inc, out, refundNet, loansIn, advancesOut, repaidIn, repaidOut, gotBack, gaveBack, pendingNet, owedOpen, oweOpen, underMonths, perfectMonths, ms, checkedToday};
+    nHabit, nTrack, hp, treasure: savings, savings, cash, netCash, inc, out, refundNet, gifts, saved, withdrawn, savingsBal, flowNet, loansIn, advancesOut, repaidIn, repaidOut, gotBack, gaveBack, pendingNet, owedOpen, oweOpen, underMonths, perfectMonths, ms, checkedToday};
   g.unlocked = ACH.filter(a => a.test(g)).map(a => a.id);
   return g;
 }
@@ -1794,7 +1809,7 @@ function drawScene(now) {
 const UI = {place: null, sub: null, menuIdx: 0, viewYM: ymOf(today()), selDay: null, draft: {amount: '', note: '', date: ''}, pickCat: null, game: null, keyScroll: 0, focusAt: 0, trackerDate: today(), tipIdx: 0};
 const MAIN_MENU = [['market', 'Dépense'], ['bank', 'Écarts'], ['bank', 'Trésorerie', 'cash'], ['archives', 'Journal'], ['board', 'Quêtes'], ['lab', 'Suivis']];
 const SUBMENUS = {
-  market:   [['add', 'Noter'], ['income', 'Rentrée'], ['refund', 'Rembours.'], ['zero', 'Jour zéro'], ['recent', 'Récentes'], ['back', 'Retour']],
+  market:   [['add', 'Noter'], ['refund', 'Autres flux'], ['zero', 'Jour zéro'], ['recent', 'Récentes'], ['back', 'Retour']],
   bank:     [['bilan', 'Bilan'], ['cash', 'Trésorerie'], ['cats', 'Catégories'], ['daily', 'Par jour'], ['top', 'Top'], ['back', 'Retour']],
   archives: [['cal', 'Calendrier'], ['list', 'Liste'], ['back', 'Retour']],
   board:    [['today', 'Du jour'], ['week', 'Semaine'], ['progress', 'Progrès'], ['trophies', 'Trophées'], ['newq', '+ Quête'], ['manage', 'Gérer'], ['back', 'Retour']],
@@ -1882,7 +1897,7 @@ function heroLine(g) {
 function panelHTML(g) {
   const p = UI.place, s = UI.sub, ms = g.ms;
   if (!p) return idlePanel(g);
-  if (p === 'market') return s === 'recent' ? recentPanel() : s === 'zero' ? zeroPanel() : s === 'income' ? incomePanel() : s === 'refund' ? refundPanel(g) : addPanel();
+  if (p === 'market') return s === 'recent' ? recentPanel() : s === 'zero' ? zeroPanel() : s === 'refund' ? refundPanel(g) : addPanel();
   if (p === 'bank') return s === 'cash' ? cashPanel(g) : bankPanel(s || 'bilan');
   if (p === 'archives') return s === 'list' ? listPanel() : calPanel();
   if (p === 'board') return s === 'week' ? weekPanel() : s === 'trophies' ? trophyPanel(g) : s === 'progress' ? progressPanel(g) : s === 'newq' ? newQuestPanel() : s === 'manage' ? manageQuestsPanel() : todayQuests();
@@ -1951,16 +1966,19 @@ function idlePanel(g) {
     ${alert || !S.expenses.length ? `<p class="say ${alert ? 'red' : 'dim'}">${esc(heroLine(g))}</p>` : ''}
     <div class="list">${worst.map(c => `<div class="li flat"><span class="grow ${c.ratio >= 1 ? 'red' : ''}">${esc(c.cat.name)}</span><span class="gauge wide"><i style="width:${Math.min(100, c.ratio * 100)}%;background:${gaugeCol(c.ratio)}"></i></span></div>`).join('')}</div>`;
 }
-function addPanel() {
-  const t = today();
+function addPanel() { // noter un mouvement : décaissement (dépense, dans le budget) ou encaissement (rentrée)
+  const t = today(), inc = UI.flowDir === 'in';
   if (!UI.pickCat || !catOf(UI.pickCat)) UI.pickCat = catOf(S.lastCat) ? S.lastCat : S.categories[0].id;
-  return `<form data-form="add" autocomplete="off">
+  if (!INCOME_CATS[UI.pickInc]) UI.pickInc = 'salaire';
+  const dir = `<div class="seg" role="radiogroup" aria-label="Sens"><button type="button" class="${inc ? '' : 'on'}" data-act="flowDir" data-v="out" role="radio" aria-checked="${!inc}">↗ Décaissement<small>une dépense</small></button><button type="button" class="${inc ? 'on' : ''}" data-act="flowDir" data-v="in" role="radio" aria-checked="${inc}">↙ Encaissement<small>une rentrée</small></button></div>`;
+  return dir + `<form data-form="${inc ? 'income' : 'add'}" autocomplete="off">
     <div class="row"><input class="amount" name="amount" inputmode="numeric" placeholder="0" value="${esc(UI.draft.amount)}" aria-label="Montant"><span class="gold">F</span></div>
     <div class="chips">${[500, 1000, 2000, 5000, 10000].map(v => `<button type="button" class="chip" data-act="chip" data-v="${v}">+${num(v)}</button>`).join('')}<button type="button" class="chip" data-act="chip" data-v="0">C</button></div>
-    <div class="cats">${S.categories.map(c => `<button type="button" class="cat ${UI.pickCat === c.id ? 'on' : ''}" data-act="pickcat" data-id="${c.id}">${monImg(c, 16)}<span>${esc(c.name)}</span></button>`).join('')}</div>
-    <input name="note" class="full" placeholder="Note (taxi, marché…)" value="${esc(UI.draft.note)}" maxlength="80">
-    <div class="row"><input type="date" name="date" class="grow" value="${esc(UI.draft.date || t)}"><button class="ffbtn">Noter</button></div>
-  </form>`;
+    ${inc ? `<div class="cats">${Object.entries(INCOME_CATS).map(([k, n]) => `<button type="button" class="cat ${UI.pickInc === k ? 'on' : ''}" data-act="pickinc" data-id="${k}"><span>${esc(n)}</span></button>`).join('')}</div>`
+      : `<div class="cats">${S.categories.map(c => `<button type="button" class="cat ${UI.pickCat === c.id ? 'on' : ''}" data-act="pickcat" data-id="${c.id}">${monImg(c, 16)}<span>${esc(c.name)}</span></button>`).join('')}</div>`}
+    <input name="note" class="full" placeholder="${inc ? 'Origine (employeur, client…)' : 'Note (taxi, marché…)'}" value="${esc(UI.draft.note)}" maxlength="80">
+    <div class="row"><input type="date" name="date" class="grow" value="${esc(UI.draft.date || t)}"><button class="ffbtn">${inc ? 'Encaisser' : 'Noter'}</button></div>
+  </form>${inc ? '<p class="dim">Un encaissement s\'ajoute à ta trésorerie ; il ne change pas le budget du jour.</p>' : ''}`;
 }
 function zeroPanel() {
   const t = today(), has = S.expenses.some(e => e.date === t);
@@ -1968,7 +1986,10 @@ function zeroPanel() {
     : has ? `<p>Tu as déjà noté des dépenses aujourd'hui. Reviens demain !</p>` : `<p>Aucune dépense aujourd'hui ? Pointe-le : +35 XP.</p><button class="ffbtn" data-act="zero">Journée sans dépense</button>`;
 }
 function expenseRow(e) { const c = catOf(e.catId); return `<button class="li" data-act="edit" data-id="${e.id}">${c ? monImg(c, 16) : ''}<span class="grow">${esc(e.note || (c ? c.name : '—'))}<br><small class="dim">${dayLabel(e.date)} · ${esc(c ? c.name : '—')}</small></span><span>${fmt(e.amount)}</span></button>`; }
-function recentPanel() { const ex = [...S.expenses].sort((a, b) => b.date.localeCompare(a.date) || (b.ts || 0) - (a.ts || 0)).slice(0, 12); return ex.length ? `<div class="list">${ex.map(expenseRow).join('')}</div>` : '<p class="dim">Aucune dépense pour le moment.</p>'; }
+function recentPanel() {
+  const rows = [...S.expenses.map(e => ({e, k: 'out'})), ...S.incomes.map(e => ({e, k: 'in'}))].sort((a, b) => b.e.date.localeCompare(a.e.date) || (b.e.ts || 0) - (a.e.ts || 0)).slice(0, 14);
+  return rows.length ? `<div class="list">${rows.map(({e, k}) => k === 'out' ? expenseRow(e) : `<div class="li"><span class="rf-dir green">↙</span><span class="grow">${esc(e.note || INCOME_CATS[e.cat] || 'Rentrée')}<br><small class="dim">${dayLabel(e.date)} · ${esc(INCOME_CATS[e.cat] || 'Rentrée')}</small></span><span class="green">+${fmt(e.amount)}</span><button class="x" data-act="delIncome" data-id="${e.id}" aria-label="Supprimer">×</button></div>`).join('')}</div>` : '<p class="dim">Rien de noté pour le moment.</p>';
+}
 function bankPanel(s) {
   const ms = monthStats(UI.viewYM), ecart = ms.budget - ms.spent, pct = ms.budget ? ms.spent / ms.budget : 0, head = monthBar(ms.ym);
   if (s === 'cats') return head + `<div class="list">${[...ms.cats].sort((a, b) => (a.budget - a.spent) - (b.budget - b.spent)).map(c => `<div class="li col"><div class="row between">${monImg(c.cat, 16, c.ratio >= 1)}<span class="grow">${esc(c.cat.name)}</span><span class="${c.budget - c.spent < 0 ? 'red' : 'green'}">${fmtS(c.budget - c.spent)}</span></div>${bar(c.ratio, gaugeCol(c.ratio))}<small class="dim">${fmt(c.spent)} / ${fmt(c.budget)} · ${Math.round(c.ratio * 100)} %${c.reserved ? ` · ${fmt(c.reserved)} réservés (wishlist)` : ''}</small></div>`).join('')}</div>`;
@@ -2014,12 +2035,6 @@ function progressPanel(g) { // le tableau de progression : où j'en suis, ce que
       ${nb ? `<span>Prochain jour tenu</span><b>${esc(nb)}</b>` : ''}<span>Série de ${g.streak < 7 ? 7 : g.streak < 14 ? 14 : g.streak < 30 ? 30 : g.streak < 60 ? 60 : 100} j</span><b>+${g.streak < 30 ? 150 : 500} XP</b></div>
     <div class="gold">BILAN</div><div class="kv"><span>XP totale</span><b>${num(g.xp)}</b><span>Meilleure série</span><b>${g.best} j</b><span>Jours sous le budget</span><b>${g.victories}</b><span>Sans dépense</span><b>${g.zeroDays}</b><span>Quêtes</span><b>${g.nHabit}</b><span>Mois réussis</span><b>${g.underMonths}</b><span>Constructions</span><b>${g.buildDays}</b></div>`;
 }
-function incomePanel() {
-  return `<p class="dim">Une rentrée d'argent (salaire, vente, remboursement) s'ajoute à ta trésorerie.</p><form data-form="income" autocomplete="off">
-    <div class="row"><input class="amount" name="amount" inputmode="numeric" placeholder="0" aria-label="Montant"><span class="gold">F</span></div>
-    <input name="note" class="full" placeholder="Origine (salaire, vente…)" maxlength="60">
-    <div class="row"><input type="date" name="date" class="grow" value="${today()}"><button class="ffbtn">Ajouter</button></div></form>`;
-}
 function charPanel() { // choisir son personnage : l'équipe de l'Open Space, et les nouveaux venus de la cité
   return `<p class="dim">Ton niveau, tes accessoires et tes tenues te suivent quel que soit le personnage.</p><div class="chars">${CHAR_ORDER.map(k => `<button class="charc ${heroChar() === k ? 'on' : ''}" data-act="pickChar" data-k="${k}">${robotImg(k, CHARS[k].outfit, 44)}<b>${esc(CHARS[k].name)}</b><small>${esc(CHARS[k].archetype)}</small>${CHARS[k].isNew ? '<i class="new">NOUVEAU</i>' : ''}</button>`).join('')}</div>`;
 }
@@ -2028,22 +2043,28 @@ function refundRow(r) {
   const rest = refundRest(r), owed = r.dir === 'owed', done = rest === 0;
   return `<div class="li ${done ? 'off' : ''}"><span class="rf-dir ${owed ? 'green' : 'red'}" title="${owed ? 'On me doit' : 'Je dois'}">${owed ? '↙' : '↗'}</span><span class="grow">${esc(r.who)}${r.note ? ` · ${esc(r.note)}` : ''}<br><small class="dim">${owed ? 'avancé' : r.how === 'cash' ? 'prêté' : 'payé pour moi'} le ${dayLabel(r.date)}${r.addCash ? ' · compté dans la trésorerie' : ''}${r.pays.length ? ` · ${done ? 'réglé' : `${fmt(r.amount - rest)} déjà rendus`}` : ''}</small></span><b class="${done ? 'dim' : owed ? 'green' : 'red'}">${fmt(done ? r.amount : rest)}</b>${done ? '' : `<button class="ffbtn sm" data-act="refundPay" data-id="${r.id}" title="${owed ? 'Marquer remboursé' : "J'ai remboursé"}">✓</button>`}<button class="x" data-act="delRefund" data-id="${r.id}" aria-label="Supprimer">×</button></div>`;
 }
-function refundPanel(g) { // les remboursements : hors budget, ils ne passent que par la trésorerie
+const FLOW_KINDS = {gift: ['↗', "J'ai fait un don", 'red'], save: ['⇣', 'Mis de côté (épargne)', 'red'], withdraw: ['⇡', "Retiré de l'épargne", 'green']};
+function flowRow(x) { const [ic, label, col] = FLOW_KINDS[x.kind], sign = x.kind === 'withdraw' ? '+' : '−';
+  return `<div class="li"><span class="rf-dir ${col}">${ic}</span><span class="grow">${esc(x.kind === 'gift' && x.who ? `Don à ${x.who}` : label)}${x.note ? ` · ${esc(x.note)}` : ''}<br><small class="dim">${dayLabel(x.date)}</small></span><b class="${col}">${sign}${fmt(x.amount)}</b><button class="x" data-act="delFlow" data-id="${x.id}" aria-label="Supprimer">×</button></div>`; }
+function refundPanel(g) { // les autres flux, hors budget : remboursements, dons, épargne ; seule la trésorerie bouge
   const open = S.refunds.filter(r => refundRest(r) > 0).sort((a, b) => a.date.localeCompare(b.date)), done = S.refunds.filter(r => refundRest(r) === 0).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
-  const real = g.gotBack - g.gaveBack;
-  return `<div class="gold">DÉJÀ RÉGLÉ</div><div class="kv"><span>Encaissé (on t'a remboursé)</span><b class="green">+${fmt(g.gotBack)}</b><span>Remboursé par toi</span><b class="${g.gaveBack ? 'red' : ''}">−${fmt(g.gaveBack)}</b><span class="gold">Solde réel</span><b class="${real < 0 ? 'red' : real > 0 ? 'green' : ''}">${fmtS(real)}</b></div>
-    <div class="gold">ENCORE DÛ</div><div class="kv"><span>On te doit</span><b class="green">+${fmt(g.owedOpen)}</b><span>Tu dois</span><b class="${g.oweOpen ? 'red' : ''}">−${fmt(g.oweOpen)}</b><span class="gold">Solde théorique</span><b class="${g.pendingNet < 0 ? 'red' : g.pendingNet > 0 ? 'green' : ''}">${fmtS(g.pendingNet)}</b></div>
-    <div class="gold">COMBINÉ</div><div class="kv"><span>Solde réel + théorique</span><b class="${real + g.pendingNet < 0 ? 'red' : real + g.pendingNet > 0 ? 'green' : ''}">${fmtS(real + g.pendingNet)}</b>${g.cash != null ? `<span>Trésorerie aujourd'hui</span><b>${fmt(g.cash)}</b><span class="gold">Si tout est remboursé et encaissé</span><b class="gold ${g.netCash < 0 ? 'red' : ''}">${fmt(g.netCash)}</b>` : ''}</div>
-    <p class="dim">Le prêt ou l'avance de départ est déjà dans ta trésorerie : seuls les remboursements encaissés ou versés la font bouger. Hors budget : le budget du jour ne change pas.</p>
-    <form data-form="refund" autocomplete="off"><div class="choices">
-      <label><input type="radio" name="kind" value="owed" checked><span>J'ai avancé de l'argent <small class="dim">(on me doit)</small></span></label>
-      <label><input type="radio" name="kind" value="owe-paid"><span>On a payé à ma place <small class="dim">(je dois)</small></span></label>
-      <label><input type="radio" name="kind" value="owe-cash"><span>On m'a prêté de l'argent <small class="dim">(je dois)</small></span></label></div>
-      <input name="who" class="full" placeholder="Qui ? (Awa, le bureau…)" maxlength="40" required>
+  const real = g.gotBack - g.gaveBack, flows = [...S.flows].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10);
+  const fk = UI.flowKind || 'owed', opt = (v, label, sub) => `<label><input type="radio" name="kind" value="${v}" ${v === fk ? 'checked' : ''}><span>${label} <small class="dim">${sub}</small></span></label>`;
+  return `<p class="dim">Hors budget : ces flux ne touchent ni le budget du jour, ni l'XP, ni la ville. Seule la trésorerie bouge.</p>
+    <form data-form="refund" autocomplete="off" class="flowform">
+      <div class="gold">REMBOURSEMENTS</div><div class="choices">${opt('owed', "J'ai avancé de l'argent", '(on me doit)')}${opt('owe-paid', 'On a payé à ma place', '(je dois)')}${opt('owe-cash', "On m'a prêté de l'argent", '(je dois)')}</div>
+      <div class="gold">DON</div><div class="choices">${opt('gift', "J'ai fait un don", '(la trésorerie baisse)')}</div>
+      <div class="gold">ÉPARGNE</div><div class="choices">${opt('save', "J'ai mis de côté", '(la trésorerie baisse, l\'épargne monte)')}${opt('withdraw', "J'ai retiré de l'épargne", '(la trésorerie remonte)')}</div>
+      <input name="who" class="full f-who" placeholder="Qui ? (Awa, la mosquée, l'église…)" maxlength="40">
       <div class="row"><input class="amount" name="amount" inputmode="numeric" placeholder="0" aria-label="Montant"><span class="gold">F</span></div>
-      <input name="note" class="full" placeholder="Pour quoi ? (déjeuner, taxi…)" maxlength="60">
-      <label class="check"><input type="checkbox" name="addCash"><span>Pas encore dans ma trésorerie <small class="dim">(prêt ou avance fait après ma trésorerie de départ)</small></span></label>
+      <input name="note" class="full" placeholder="Pour quoi ? (facultatif)" maxlength="60">
+      <label class="check f-cash"><input type="checkbox" name="addCash"><span>Pas encore dans ma trésorerie <small class="dim">(prêt ou avance fait après ma trésorerie de départ)</small></span></label>
       <div class="row"><input type="date" name="date" class="grow" value="${today()}"><button class="ffbtn">Ajouter</button></div></form>
+    ${g.gifts || g.saved || g.withdrawn || g.savingsBal ? `<div class="gold">DONS ET ÉPARGNE</div><div class="kv">${g.gifts ? `<span>Dons faits</span><b class="red">−${fmt(g.gifts)}</b>` : ''}${g.saved || g.withdrawn ? `<span>Épargne : mis de côté − retiré</span><b>${fmtS(g.saved - g.withdrawn)}</b>` : ''}<span class="gold">Épargne totale</span><b class="gold">${fmt(g.savingsBal)}</b></div>${flows.length ? `<div class="list">${flows.map(flowRow).join('')}</div>` : ''}` : ''}
+    <div class="gold">REMBOURSEMENTS · DÉJÀ RÉGLÉ</div><div class="kv"><span>Encaissé (on t'a remboursé)</span><b class="green">+${fmt(g.gotBack)}</b><span>Remboursé par toi</span><b class="${g.gaveBack ? 'red' : ''}">−${fmt(g.gaveBack)}</b><span class="gold">Solde réel</span><b class="${real < 0 ? 'red' : real > 0 ? 'green' : ''}">${fmtS(real)}</b></div>
+    <div class="gold">REMBOURSEMENTS · ENCORE DÛ</div><div class="kv"><span>On te doit</span><b class="green">+${fmt(g.owedOpen)}</b><span>Tu dois</span><b class="${g.oweOpen ? 'red' : ''}">−${fmt(g.oweOpen)}</b><span class="gold">Solde théorique</span><b class="${g.pendingNet < 0 ? 'red' : g.pendingNet > 0 ? 'green' : ''}">${fmtS(g.pendingNet)}</b></div>
+    <div class="gold">COMBINÉ</div><div class="kv"><span>Solde réel + théorique</span><b class="${real + g.pendingNet < 0 ? 'red' : real + g.pendingNet > 0 ? 'green' : ''}">${fmtS(real + g.pendingNet)}</b>${g.cash != null ? `<span>Trésorerie aujourd'hui</span><b>${fmt(g.cash)}</b><span class="gold">Si tout est remboursé et encaissé</span><b class="gold ${g.netCash < 0 ? 'red' : ''}">${fmt(g.netCash)}</b>` : ''}</div>
+    <p class="dim">Le prêt ou l'avance de départ est déjà dans ta trésorerie : seuls les remboursements encaissés ou versés la font bouger.</p>
     <div class="gold">EN ATTENTE</div>${open.length ? `<div class="list">${open.map(refundRow).join('')}</div>` : '<p class="dim">Rien en attente.</p>'}
     ${done.length ? `<div class="gold">RÉGLÉS</div><div class="list">${done.map(refundRow).join('')}</div>` : ''}`;
 }
@@ -2057,13 +2078,13 @@ function cashPanel(g) { // la trésorerie : le solde du jour, et d'où il vient
   const sdShort = `${sd.slice(8, 10)}/${sd.slice(5, 7)}`;
   const head = `<div class="row between wrap"><span class="gold">TRÉSORERIE</span><b class="big ${g.cash != null && g.cash < 0 ? 'red' : ''}">${g.cash == null ? '—' : fmt(g.cash)}</b></div>`;
   const calc = g.cash == null ? '<p class="dim">Indique combien tu as aujourd\'hui : la trésorerie suivra ensuite tes dépenses, tes rentrées et tes remboursements.</p>'
-    : `<div class="kv"><span>Départ (${sdShort})</span><b>${fmt(S.startCash)}</b><span>+ Rentrées</span><b class="green">${fmt(g.inc)}</b><span>− Dépenses</span><b class="red">${fmt(g.out)}</b>${g.loansIn ? `<span>+ Prêts reçus</span><b class="green">${fmt(g.loansIn)}</b>` : ''}${g.advancesOut ? `<span>− Avances faites</span><b class="red">${fmt(g.advancesOut)}</b>` : ''}${g.repaidIn ? `<span>+ Remboursements reçus</span><b class="green">${fmt(g.repaidIn)}</b>` : ''}${g.repaidOut ? `<span>− Remboursements versés</span><b class="red">${fmt(g.repaidOut)}</b>` : ''}<span class="gold">= Disponible</span><b class="gold">${fmt(g.cash)}</b></div>
+    : `<div class="kv"><span>Départ (${sdShort})</span><b>${fmt(S.startCash)}</b><span>+ Rentrées</span><b class="green">${fmt(g.inc)}</b><span>− Dépenses</span><b class="red">${fmt(g.out)}</b>${g.loansIn ? `<span>+ Prêts reçus</span><b class="green">${fmt(g.loansIn)}</b>` : ''}${g.advancesOut ? `<span>− Avances faites</span><b class="red">${fmt(g.advancesOut)}</b>` : ''}${g.repaidIn ? `<span>+ Remboursements reçus</span><b class="green">${fmt(g.repaidIn)}</b>` : ''}${g.repaidOut ? `<span>− Remboursements versés</span><b class="red">${fmt(g.repaidOut)}</b>` : ''}${g.gifts ? `<span>− Dons faits</span><b class="red">${fmt(g.gifts)}</b>` : ''}${g.saved ? `<span>− Mis de côté</span><b class="red">${fmt(g.saved)}</b>` : ''}${g.withdrawn ? `<span>+ Retiré de l'épargne</span><b class="green">${fmt(g.withdrawn)}</b>` : ''}<span class="gold">= Disponible</span><b class="gold">${fmt(g.cash)}</b>${g.savingsBal ? `<span>Épargne de côté</span><b>${fmt(g.savingsBal)}</b>` : ''}</div>
       ${g.pendingNet || g.owedOpen || g.oweOpen ? `<div class="kv">${g.owedOpen ? `<span>+ On te doit encore</span><b class="green">${fmt(g.owedOpen)}</b>` : ''}${g.oweOpen ? `<span>− Tu dois encore</span><b class="red">${fmt(g.oweOpen)}</b>` : ''}<span>Remboursements en attente</span><b class="${g.pendingNet < 0 ? 'red' : 'green'}">${fmtS(g.pendingNet)}</b><span class="gold">= Si tout est remboursé et encaissé</span><b class="gold ${g.netCash < 0 ? 'red' : ''}">${fmt(g.netCash)}</b></div><p class="dim">La trésorerie nette, c'est ce qui te restera une fois tous les remboursements réglés.</p>` : ''}
       ${beforeSum ? `<p class="dim">${before.length > 1 ? `${before.length} dépenses de ce mois (${fmt(beforeSum)}) datent d'avant le départ : elles ne sont pas déduites` : `1 dépense de ce mois (${fmt(beforeSum)}) date d'avant le départ : elle n'est pas déduite`}. Recule la date de départ au 1er du mois si elle${before.length > 1 ? 's doivent' : ' doit'} compter.</p>` : ''}
       <div class="kv"><span>Fin du mois, budget épuisé${g.pendingNet ? ' (net)' : ''}</span><b>${fmt(g.netCash - Math.max(0, ms.remaining))}</b></div>`;
   return head + calc + `<div class="gold">DÉPART</div><form data-form="cash" class="col"><div class="row"><input name="amount" class="amount" inputmode="numeric" value="${S.startCash == null ? '' : num(S.startCash)}" placeholder="0" aria-label="Trésorerie de départ"><span class="gold">F</span></div>
     <div class="row"><span class="dim">au</span><input type="date" name="date" class="grow" value="${esc(sd)}"><button class="ffbtn">Valider</button></div></form>
-    <div class="gold">RENTRÉES</div>${inc.length ? `<div class="list">${inc.map(e => `<div class="li"><span class="grow">${esc(e.note || 'Rentrée')}<br><small class="dim">${dayLabel(e.date)}${e.date < sd ? ' · avant le départ, non comptée' : ''}</small></span><span class="green">+${fmt(e.amount)}</span><button class="x" data-act="delIncome" data-id="${e.id}" aria-label="Supprimer">×</button></div>`).join('')}</div>` : '<p class="dim">Aucune. Marché › Rentrée pour en ajouter.</p>'}`;
+    <div class="gold">RENTRÉES</div>${inc.length ? `<div class="list">${inc.map(e => `<div class="li"><span class="grow">${esc(e.note || INCOME_CATS[e.cat] || 'Rentrée')}<br><small class="dim">${dayLabel(e.date)} · ${esc(INCOME_CATS[e.cat] || 'Rentrée')}${e.date < sd ? ' · avant le départ, non comptée' : ''}</small></span><span class="green">+${fmt(e.amount)}</span><button class="x" data-act="delIncome" data-id="${e.id}" aria-label="Supprimer">×</button></div>`).join('')}</div>` : '<p class="dim">Aucune. Marché › Noter › Encaissement pour en ajouter.</p>'}`;
 }
 function lookPanel(g) { // l'apparence : les couleurs, et les accessoires gagnés avec les niveaux
   const L = heroLook(), sw = c => `<i style="background:${c}"></i>`, o = (k, v, inner) => `<button class="sw ${L[k] === v ? 'on' : ''}" data-act="look" data-k="${k}" data-v="${v == null ? '' : v}">${inner}</button>`;
@@ -2085,7 +2106,7 @@ function homePanel(s, g) {
   if (s === 'cash') return cashPanel(g);
   if (s === 'skins') return `<div class="list">${Object.entries(SKINS).map(([k, sk]) => { const on = S.world.skins.includes(k), src = CHESTS.find(c => c.skin === k); return `<button class="li ${on ? '' : 'off'} ${S.world.skin === k ? 'sel' : ''}" ${on ? `data-act="skin" data-id="${k}"` : 'disabled'}>${robotImg('hero|' + heroChar() + '|' + k + '|' + JSON.stringify(heroLook()), heroOutfitFor(k, heroLook(), heroChar()), 32, on ? {} : {grey: true})}<span class="grow">${on ? esc(sk.name) : '???'}<br><small class="dim">${on ? (S.world.skin === k ? 'Portée' : 'Toucher pour porter') : esc(src && src.cond ? 'À débloquer : ' + src.cond.txt : '')}</small></span></button>`; }).join('')}</div>`;
   if (s === 'save') return `${SYNC.on ? `<p>${SYNC.err ? '<span class="red">Coffre en ligne injoignable</span> : tes données sont gardées sur cet appareil et repartiront dès que possible.' : `<span class="green">Coffre en ligne actif</span> pour <b class="gold">${esc(accessName())}</b>${SYNC.last ? ` · à jour à ${new Date(SYNC.last).toTimeString().slice(0, 5)}` : ''}. Tes données te suivent sur tous tes appareils, avec le même nom à l'entrée.`}</p>` : `<p class="dim">Tes données restent sur cet appareil. Exporte-les pour les garder ou les transférer.</p>`}<div class="col gap"><button class="ffbtn" data-act="export">Exporter (JSON)</button><button class="ffbtn" data-act="csv">Exporter (CSV)</button><button class="ffbtn" data-act="import">Importer</button><button class="ffbtn red" data-act="reset">Tout effacer</button></div><input type="file" id="importFile" accept=".json,application/json" hidden>`;
-  if (s === 'rules') return `<p>Chaque catégorie a son budget du mois. Le <b class="gold">budget du jour</b> = ce qui reste ÷ jours restants.</p><p><b class="gold">XP par jour</b> : +10 journal tenu, +2 par dépense notée (5 max), +30 à +50 sous le budget du jour (plus tu restes loin de la limite, plus ça rapporte), +20 sans dépense, +15 par quête, +25 si toutes sont faites, +5 par mesure (+10 si l'objectif est atteint).</p><p><b class="gold">Combo</b> : chaque jour de série ajoute 4 % à l'XP du jour, jusqu'à ×2. Paliers : +150 XP à 7 et 14 jours, +500 à 30, 60 et 100.</p><p><b class="gold">Fin de mois</b> : +300 XP si le mois est sous le budget, +40 par catégorie tenue.</p><p><b class="gold">Niveaux</b> : chaque niveau demande 75 XP de plus que le précédent, et débloque souvent un accessoire.</p><p><b class="gold">La ville en contrebas</b> part de zéro : chaque jour terminé sous le budget du jour lui ajoute une construction (chemin, arbre, maison, puits, moulin, lac, église… jusqu'au royaume). Le chantier du jour apparaît dès que la journée est sur la bonne voie.</p><p><b class="gold">Wishlist</b> (bouton 🎁) : chaque envie réserve son prix dans le budget de sa catégorie, le mois prévu. Ce mois-là, le budget du jour baisse d'autant. Une fois achetée, elle devient une dépense et la réservation disparaît. Les Prévisions tracent ta trésorerie sur 12 mois.</p><p><b class="gold">Remboursements</b> (Marché › Rembours.) : une avance faite pour quelqu'un, ou ce que tu dois, passe par la trésorerie mais jamais par le budget : ni le budget du jour, ni l'XP, ni la ville ne bougent.</p><p><b class="gold">Météo</b> : soleil sous le budget du jour, nuages près de la limite, pluie au-delà, orage si une catégorie déborde.</p>`;
+  if (s === 'rules') return `<p>Chaque catégorie a son budget du mois. Le <b class="gold">budget du jour</b> = ce qui reste ÷ jours restants.</p><p><b class="gold">XP par jour</b> : +10 journal tenu, +2 par dépense notée (5 max), +30 à +50 sous le budget du jour (plus tu restes loin de la limite, plus ça rapporte), +20 sans dépense, +15 par quête, +25 si toutes sont faites, +5 par mesure (+10 si l'objectif est atteint).</p><p><b class="gold">Combo</b> : chaque jour de série ajoute 4 % à l'XP du jour, jusqu'à ×2. Paliers : +150 XP à 7 et 14 jours, +500 à 30, 60 et 100.</p><p><b class="gold">Fin de mois</b> : +300 XP si le mois est sous le budget, +40 par catégorie tenue.</p><p><b class="gold">Niveaux</b> : chaque niveau demande 75 XP de plus que le précédent, et débloque souvent un accessoire.</p><p><b class="gold">La ville en contrebas</b> part de zéro : chaque jour terminé sous le budget du jour lui ajoute une construction (chemin, arbre, maison, puits, moulin, lac, église… jusqu'au royaume). Le chantier du jour apparaît dès que la journée est sur la bonne voie.</p><p><b class="gold">Wishlist</b> (bouton 🎁) : chaque envie réserve son prix dans le budget de sa catégorie, le mois prévu. Ce mois-là, le budget du jour baisse d'autant. Une fois achetée, elle devient une dépense et la réservation disparaît. Les Prévisions tracent ta trésorerie sur 12 mois.</p><p><b class="gold">Remboursements</b> (Marché › Autres flux) : une avance faite pour quelqu'un, ou ce que tu dois, passe par la trésorerie mais jamais par le budget : ni le budget du jour, ni l'XP, ni la ville ne bougent.</p><p><b class="gold">Météo</b> : soleil sous le budget du jour, nuages près de la limite, pluie au-delà, orage si une catégorie déborde.</p>`;
   return `<label class="dim">Nom du héros</label><input class="full" value="${esc(S.heroName)}" maxlength="20" data-chg="heroName" placeholder="${esc(CHARS[heroChar()].name)}"><div class="kv"><span>Niveau</span><b>${g.level} · ${titleFor(g.level)}</b><span>PV</span><b>${g.hp}/100</b><span>XP</span><b>${num(g.xpIn)}/${num(g.xpNext)}</b><span>Trésorerie</span><b>${g.cash == null ? '—' : fmt(g.cash)}</b></div>${accessName() ? `<p class="dim">Accès ouvert pour <b class="gold">${esc(accessName())}</b>.</p><a class="ffbtn full center" href="/sortie">Se déconnecter</a>` : ''}<div class="col gap"><button class="ffbtn" data-act="sound">Sons : ${S.sound ? 'oui' : 'non'}</button><button class="ffbtn" data-act="music">Musique : ${MUSIC.on ? 'oui' : 'non'}</button></div>`;
 }
 
@@ -2196,6 +2217,8 @@ function download(name, text, type) {
 const ACT = {
   menu: a => chooseMenu(+a.dataset.i),
   chip: a => { const inp = $('#panel [name=amount]'); const v = +a.dataset.v, n = v ? parseAmt(inp.value) + v : 0; inp.value = n ? num(n) : ''; UI.draft.amount = inp.value; SFX.click(); },
+  flowDir: a => { UI.flowDir = a.dataset.v; SFX.click(); renderUI(); },
+  pickinc: a => { UI.pickInc = a.dataset.id; document.querySelectorAll('#panel .cat').forEach(b => b.classList.toggle('on', b.dataset.id === UI.pickInc)); SFX.click(); },
   pickcat: a => { UI.pickCat = a.dataset.id; document.querySelectorAll('#panel .cat').forEach(b => b.classList.toggle('on', b.dataset.id === UI.pickCat)); SFX.click(); },
   zero: () => { const t = today(); if (S.checkins[t]) delete S.checkins[t]; else S.checkins[t] = true; SFX.quest(); commit('Journée sans dépense : la cité respire.'); },
   habit: a => { const {id, date} = a.dataset; S.habitLog[date] = S.habitLog[date] || {}; if (S.habitLog[date][id]) delete S.habitLog[date][id]; else S.habitLog[date][id] = true; const all = S.habits.every(h => habitDone(today(), h.id)); if (habitDone(date, id)) (all && date === today() ? fanfare : SFX.quest)(); commit(all ? 'Toutes les quêtes du jour : bravo !' : 'Quête accomplie.'); },
@@ -2212,6 +2235,7 @@ const ACT = {
   welcomeBack: () => { const c = $('#modalBox [name=cash]'); if (c) UI.welcomeCash = c.value; SFX.click(); welcome(); },
   refundPay: a => refundPay(a.dataset.id),
   delRefund: a => { const r = S.refunds.find(x => x.id === a.dataset.id); if (r && confirm(`Supprimer le remboursement « ${r.who} » de ${fmt(r.amount)} ?`)) { S.refunds = S.refunds.filter(x => x !== r); commit(); } },
+  delFlow: a => { const x = S.flows.find(y => y.id === a.dataset.id); if (x && confirm(`Supprimer « ${FLOW_KINDS[x.kind][1]} » de ${fmt(x.amount)} ?`)) { S.flows = S.flows.filter(y => y !== x); commit(); } },
   delIncome: a => { const e = S.incomes.find(x => x.id === a.dataset.id); if (e && confirm(`Supprimer la rentrée de ${fmt(e.amount)} ?`)) { S.incomes = S.incomes.filter(x => x !== e); commit(); } },
   goCash: () => openPlace('bank', 'cash'),
   goConfig: () => { if (UI.place === 'home') closePlace(); else openPlace('home'); },
@@ -2242,7 +2266,7 @@ document.addEventListener('click', e => { const a = e.target.closest('[data-act]
 document.addEventListener('input', e => {
   const t = e.target;
   if (t.name === 'amount') { const n = parseAmt(t.value); t.value = n ? num(n) : ''; }
-  if (t.closest('form[data-form=add]')) UI.draft[t.name] = t.value;
+  if (t.closest('form[data-form=add],form[data-form=income]')) UI.draft[t.name] = t.value;
   if (t.dataset.bud != null) { // les budgets : on formate, on recompte le total, on signale ce qui n'est pas encore validé
     const n = parseAmt(t.value); t.value = n || t.value === '' ? num(n) : '';
     const f = t.form, ins = [...f.querySelectorAll('[data-bud]')]; let total = 0, changed = 0;
@@ -2295,17 +2319,22 @@ document.addEventListener('submit', e => {
   }
   else if (k === 'income-plan') { const c = v('amount'); S.expectedIncome = c.trim() ? parseAmt(c) : null; SFX.coin(); commit(); }
   else if (k === 'refund') {
-    const amount = parseAmt(v('amount')), who = v('who').trim().slice(0, 40), kind = v('kind') || 'owed';
+    const amount = parseAmt(v('amount')), who = v('who').trim().slice(0, 40), kind = v('kind') || 'owed'; UI.flowKind = kind;
+    if (FLOW_KINDS[kind]) { // don, épargne
+      if (!amount) { toast('Montant ?', 'Indique le montant.'); return; }
+      S.flows.push({id: uid(), kind, amount, date: v('date') || today(), who: kind === 'gift' ? who : '', note: v('note').trim().slice(0, 60)});
+      SFX.coin(); toast(FLOW_KINDS[kind][1], `${kind === 'withdraw' ? '+' : '−'}${fmt(amount)} sur la trésorerie. Le budget du jour ne bouge pas.`); UI.sub = 'refund'; return commit();
+    }
     if (!who) { toast('Qui ?', 'Indique avec qui.'); return; } if (!amount) { toast('Montant ?', 'Indique le montant.'); return; }
     S.refunds.push({id: uid(), dir: kind === 'owed' ? 'owed' : 'owe', how: kind === 'owe-cash' ? 'cash' : 'paid', who, amount, date: v('date') || today(), note: v('note').trim().slice(0, 60), addCash: !!fd.get('addCash') && kind !== 'owe-paid', pays: []});
-    SFX.coin(); toast('Remboursement noté', kind === 'owed' ? `${who} te doit ${fmt(amount)}. Ton budget du jour ne bouge pas.` : `Tu dois ${fmt(amount)} à ${who}. Ton budget du jour ne bouge pas.`); UI.sub = 'refund'; commit();
+    SFX.coin(); toast('Flux noté', kind === 'owed' ? `${who} te doit ${fmt(amount)}. Ton budget du jour ne bouge pas.` : `Tu dois ${fmt(amount)} à ${who}. Ton budget du jour ne bouge pas.`); UI.sub = 'refund'; commit();
   }
   else if (k === 'refundPay') {
     const r = S.refunds.find(x => x.id === f.dataset.id); if (!r) return; const amount = Math.min(parseAmt(v('amount')), refundRest(r)); if (!amount) return;
     r.pays.push({id: uid(), date: v('date') || today(), amount}); closeModal(); SFX.quest();
     toast(refundRest(r) ? 'Remboursement partiel' : 'Remboursement réglé', r.dir === 'owed' ? `+${fmt(amount)} dans la trésorerie.` : `−${fmt(amount)} de la trésorerie.`); commit();
   }
-  else if (k === 'income') { const amount = parseAmt(v('amount')); if (!amount) { toast('Montant ?', 'Indique combien tu as reçu.'); return; } S.incomes.push({id: uid(), date: v('date') || today(), amount, note: v('note').trim().slice(0, 60)}); SFX.coin(); toast('Rentrée notée', `+${fmt(amount)} dans la trésorerie.`); UI.sub = 'income'; commit(); }
+  else if (k === 'income') { const amount = parseAmt(v('amount')); if (!amount) { toast('Montant ?', 'Indique combien tu as reçu.'); return; } S.incomes.push({id: uid(), date: v('date') || today(), amount, cat: UI.pickInc || 'autre', note: v('note').trim().slice(0, 60), ts: Date.now()}); UI.draft = {amount: '', note: '', date: ''}; SFX.coin(); toast('Encaissement noté', `+${fmt(amount)} (${INCOME_CATS[UI.pickInc] || 'Autre'}) dans la trésorerie.`); commit(); }
   else if (k === 'budgets') { // valider les budgets du mois affiché
     const ym = UI.viewYM, row = S.budgets[ym] = S.budgets[ym] || {}; let changed = 0;
     for (const c of S.categories) { const val = parseAmt(v('b_' + c.id)); if (val !== getBudget(ym, c)) changed++; row[c.id] = val; }

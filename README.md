@@ -126,7 +126,7 @@ Tout passe par les fenêtres bleues du bas : on choisit avec la main, au doigt, 
 
 | Menu | Lieu | Robot | Ce qu'on y fait |
 |---|---|---|---|
-| **Dépense** | Le Marché | Zaza | Noter une dépense, noter une **rentrée** d'argent, pointer un jour sans dépense, revoir les dernières |
+| **Dépense** | Le Marché | Zaza | **Noter** un décaissement (dépense) ou un encaissement (rentrée), **Autres flux** (remboursements, dons, épargne), pointer un jour sans dépense, revoir les derniers mouvements |
 | **Écarts** | La Banque des Écarts | Hares | Bilan du mois (budget, réel, écart, projection), écarts par catégorie, graphique jour par jour, plus grosses dépenses |
 | **Journal** | Les Archives | Margaux | Calendrier du mois, liste, modification et suppression |
 | **Quêtes** | Le Tableau des quêtes | Rook | Habitudes du jour, semaine, **progression**, trophées, nouvelle quête, **Gérer** (renommer, supprimer : l'XP déjà gagnée reste acquise) |
@@ -160,23 +160,32 @@ Le bouton **🎁**, à côté de ⚙ en haut à droite, ouvre le Belvédère : l
 - Le revenu prévu se règle sur l'écran ; sans réglage, c'est la moyenne des rentrées des trois derniers mois.
 - Si la courbe passe sous zéro, l'écran dit quand et de combien : de quoi repousser une envie, ajuster un budget ou prévoir une rentrée.
 
-## Les remboursements (hors budget)
+## Noter : décaissement ou encaissement
 
-Marché › **Rembours.** garde la trace de l'argent avancé ou dû, **sans toucher au budget** : ni le budget du jour, ni l'XP, ni la météo, ni la ville en contrebas ne bougent.
+Marché › **Noter** commence par le sens du mouvement :
+- **Décaissement** : une dépense, dans une catégorie de budget. Elle compte dans le budget du jour.
+- **Encaissement** : une rentrée, avec sa catégorie (Salaire, Prime, Vente, Cadeau reçu, Autre). Elle s'ajoute à la trésorerie sans changer le budget du jour. Le revenu prévu des prévisions ignore les cadeaux reçus.
 
-**Un prêt reçu ou une avance faite est déjà dans ta trésorerie de départ** : le noter ne la change pas, pour éviter un double comptage. Seuls les remboursements réellement encaissés ou versés ensuite (bouton ✓, partiel possible) font bouger la trésorerie.
-- Pour un prêt ou une avance fait **après** ta trésorerie de départ, coche « Pas encore dans ma trésorerie » : il sera alors compté.
-- Trois cas : « J'ai avancé de l'argent » (on me doit), « On a payé à ma place » et « On m'a prêté de l'argent » (je dois).
+Récentes montre les deux, mêlés par date.
 
-L'écran montre trois soldes :
+## Les autres flux (hors budget)
 
-| Bloc | Contenu |
+Marché › **Autres flux** regroupe ce qui touche la trésorerie **sans toucher au budget** : ni le budget du jour, ni l'XP, ni la météo, ni la ville en contrebas ne bougent.
+
+| Flux | Effet sur la trésorerie |
 |---|---|
-| **Déjà réglé** | Encaissé (on t'a remboursé), remboursé par toi, **solde réel** |
-| **Encore dû** | On te doit, tu dois, **solde théorique** (négatif si tu dois plus qu'on ne te doit) |
-| **Combiné** | Solde réel + théorique, trésorerie d'aujourd'hui, et la trésorerie **si tout est remboursé et encaissé** |
+| **J'ai avancé de l'argent** (on me doit) | Aucun à la saisie (déjà dans la trésorerie de départ) ; elle remonte quand on te rembourse |
+| **On a payé à ma place** (je dois) | Aucun à la saisie ; elle baisse quand tu rembourses |
+| **On m'a prêté de l'argent** (je dois) | Aucun à la saisie (déjà dans la trésorerie de départ) ; elle baisse quand tu rembourses |
+| **J'ai fait un don** | Elle baisse du montant du don |
+| **J'ai mis de côté** (épargne) | Elle baisse ; l'épargne monte |
+| **J'ai retiré de l'épargne** | Elle remonte ; l'épargne baisse |
 
-L'écran Trésorerie reprend le même calcul : le **disponible** (départ + rentrées − dépenses + remboursements encaissés − remboursements versés), puis la trésorerie **si tout est remboursé et encaissé**, dont partent les prévisions.
+- Pour un prêt ou une avance fait **après** ta trésorerie de départ, coche « Pas encore dans ma trésorerie » : il sera alors compté.
+- Remboursements : le bouton ✓ règle tout ou partie. L'écran montre le **solde réel** (encaissé − remboursé par toi), le **solde théorique** (on te doit − tu dois), le **combiné** et la trésorerie **si tout est remboursé et encaissé**.
+- Dons et épargne : le total des dons, l'épargne totale de côté, et la liste des derniers mouvements.
+
+L'écran Trésorerie reprend tout : le **disponible** (départ + rentrées − dépenses ± remboursements − dons − mis de côté + retiré de l'épargne), l'épargne de côté, puis la trésorerie **si tout est remboursé et encaissé**, dont partent les prévisions.
 
 ## L'XP : chaque jour compte
 
