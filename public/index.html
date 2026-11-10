@@ -269,7 +269,7 @@ canvas.spark{width:100%;height:30px}
         <canvas id="scene" aria-label="La cité suspendue, vue depuis le PC de Roré"></canvas>
         <div id="dlg" class="ff" data-act="dlg" hidden><span id="dlgFace"></span><div class="grow"><div id="dlgWho"></div><div id="dlgTxt"></div></div></div>
         <div id="title" class="ff"></div>
-        <button id="wishBtn" class="ff cfgbtn wishbtn" data-act="goWish" title="Wishlist et prévisions" aria-label="Wishlist et prévisions"><svg viewBox="0 0 8 8" width="22" height="22" shape-rendering="crispEdges" aria-hidden="true"><path fill="#e5484d" d="M1 3h6v5H1z"/><path fill="#ff6b70" d="M0 2h8v2H0z"/><path fill="#ffd166" d="M3 2h2v6H3zM2 0h1v2H2zM5 0h1v2H5z"/></svg></button>
+        <button id="wishBtn" class="ff cfgbtn wishbtn" data-act="goWish" title="Wish list et prévisions" aria-label="Wish list et prévisions"><svg viewBox="0 0 8 8" width="22" height="22" shape-rendering="crispEdges" aria-hidden="true"><path fill="#e5484d" d="M1 3h6v5H1z"/><path fill="#ff6b70" d="M0 2h8v2H0z"/><path fill="#ffd166" d="M3 2h2v6H3zM2 0h1v2H2zM5 0h1v2H5z"/></svg></button>
         <button id="cfgBtn" class="ff cfgbtn" data-act="goConfig" title="Configuration" aria-label="Configuration"><svg viewBox="0 0 16 16" width="22" height="22" shape-rendering="crispEdges" aria-hidden="true"><path fill="#e4e4f0" d="M6 1h4v2h2v1h1v2h2v4h-2v2h-1v1h-2v2H6v-2H4v-1H3v-2H1V6h2V4h1V3h2z"/><path fill="#8a94d0" d="M6 6h4v4H6z"/><path fill="#1c2680" d="M7 7h2v2H7z"/></svg></button>
         <div id="tag" class="ff" hidden></div>
         <div class="hint">◀ glisser ▶</div>
@@ -911,7 +911,7 @@ function migrate(s) {
   s.world.look = nl;
   const okDate = d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d), amt = v => Math.max(0, Math.round(+v || 0));
   s.wishes = s.wishes.filter(w => w && typeof w.name === 'string' && /^\d{4}-\d{2}$/.test(w.month)).map(w => ({...w, price: amt(w.price), bought: w.bought && okDate(w.bought.date) ? {...w.bought, amount: amt(w.bought.amount)} : null}));
-  s.flows = s.flows.filter(x => x && okDate(x.date) && ['gift', 'save', 'withdraw'].includes(x.kind)).map(x => ({...x, amount: amt(x.amount)}));
+  s.flows = s.flows.filter(x => x && okDate(x.date) && ['gift', 'save', 'withdraw', 'spend'].includes(x.kind)).map(x => ({...x, amount: amt(x.amount)}));
   s.incomes.forEach(e => { if (!INCOME_CATS[e.cat]) e.cat = 'autre'; });
   s.refunds = s.refunds.filter(r => r && okDate(r.date) && ['owed', 'owe'].includes(r.dir)).map(r => ({...r, addCash: !!r.addCash, amount: amt(r.amount), how: r.how === 'cash' ? 'cash' : 'paid', pays: (Array.isArray(r.pays) ? r.pays : []).filter(x => x && okDate(x.date)).map(x => ({...x, amount: amt(x.amount)}))}));
   s.incomes = s.incomes.filter(e => e && typeof e.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(e.date)).map(e => ({...e, amount: Math.max(0, Math.round(+e.amount || 0))}));
@@ -981,7 +981,7 @@ const totalBudget = ym => S.categories.reduce((a, c) => a + getBudget(ym, c), 0)
 function expectedIncome() {
   if (S.expectedIncome != null) return S.expectedIncome;
   const ym0 = ymOf(today()), months = [1, 2, 3].map(k => addMonths(ym0, -k));
-  const tot = S.incomes.filter(e => e.cat !== 'cadeau' && months.includes(ymOf(e.date))).reduce((a, e) => a + e.amount, 0);
+  const tot = S.incomes.filter(e => e.cat !== 'cadeau' && !e.wishId && months.includes(ymOf(e.date))).reduce((a, e) => a + e.amount, 0);
   return Math.round(tot / 3);
 }
 // La trésorerie mois par mois sur un an : + revenu prévu, − budgets (ou les envies, si elles dépassent leur budget)
@@ -990,7 +990,9 @@ function forecast(g) {
   for (let k = 0; k < 12; k++) {
     const ym = addMonths(ym0, k), ms = monthStats(ym); let out = 0;
     for (const c of ms.cats) out += k === 0 ? Math.max(c.budget - c.spent, c.reserved, 0) : Math.max(c.budget, c.reserved);
-    const got = k === 0 ? S.incomes.filter(e => ymOf(e.date) === ym).reduce((a, e) => a + e.amount, 0) : 0, income = k === 0 ? Math.max(0, inc - got) : inc;
+    const got = k === 0 ? S.incomes.filter(e => ymOf(e.date) === ym && !e.wishId && e.cat !== 'cadeau').reduce((a, e) => a + e.amount, 0) : 0, mw = S.wishes.filter(w => !w.bought && w.month === ym);
+    const income = (k === 0 ? Math.max(0, inc - got) : inc) + mw.filter(w => w.catId === WISH_IN).reduce((a, w) => a + w.price, 0);
+    out += mw.filter(w => w.catId === WISH_OUT).reduce((a, w) => a + w.price, 0); // les décaissements hors budget de la Wish list
     bal += income - out;
     rows.push({ym, income, out, bal, wishes: S.wishes.filter(w => !w.bought && w.month === ym), over: ms.cats.filter(c => c.reserved > c.budget)});
   }
@@ -1154,7 +1156,7 @@ function computeGame() {
   const refundNet = loansIn - advancesOut + repaidIn - repaidOut, pendingNet = owedOpen - oweOpen;
   // les autres flux : dons faits et argent mis de côté sortent de la trésorerie, les retraits d'épargne y reviennent
   let gifts = 0, saved = 0, withdrawn = 0, savingsBal = 0;
-  for (const x of S.flows) { const k = x.kind; if (k === 'save') savingsBal += x.amount; if (k === 'withdraw') savingsBal -= x.amount; if (x.date < sd) continue; if (k === 'gift') gifts += x.amount; else if (k === 'save') saved += x.amount; else withdrawn += x.amount; }
+  for (const x of S.flows) { const k = x.kind; if (k === 'save') savingsBal += x.amount; if (k === 'withdraw') savingsBal -= x.amount; if (x.date < sd) continue; if (k === 'gift' || k === 'spend') gifts += x.amount; else if (k === 'save') saved += x.amount; else withdrawn += x.amount; }
   const flowNet = withdrawn - gifts - saved;
   const cash = S.startCash == null ? null : S.startCash + inc - out + refundNet + flowNet, netCash = cash == null ? null : cash + pendingNet;
   const o = byDate.get(t), todaySum = o ? o.sum : 0, checkedToday = byDate.has(t) || !!S.checkins[t];
@@ -1538,7 +1540,7 @@ function drawBuild(g, it, pal, VW, ghost) {
 // Ce qui rend chaque lieu reconnaissable
 const PLACE_INFO = {
   home: 'Héros, budgets, trésorerie, apparence', archives: 'Le journal du mois', market: 'Noter une dépense ou une rentrée',
-  board: 'Les quêtes et la progression', bank: 'Budget, réel et écarts', lab: 'Les suivis personnalisés', belvedere: 'Wishlist, prévisions et conseils',
+  board: 'Les quêtes et la progression', bank: 'Budget, réel et écarts', lab: 'Les suivis personnalisés', belvedere: 'Wish list, prévisions et conseils',
 };
 const DIGITS = {'4': ['x.x', 'x.x', 'xxx', '..x', '..x'], '3': ['xxx', '..x', '.xx', '..x', 'xxx']};
 const pxText = (g, x, y, txt, col) => [...txt].forEach((ch, k) => (DIGITS[ch] || []).forEach((row, j) => [...row].forEach((v, i) => { if (v === 'x') P1(g, x + k * 4 + i, y + j, col); })));
@@ -1815,7 +1817,7 @@ const SUBMENUS = {
   board:    [['today', 'Du jour'], ['week', 'Semaine'], ['progress', 'Progrès'], ['trophies', 'Trophées'], ['newq', '+ Quête'], ['manage', 'Gérer'], ['back', 'Retour']],
   lab:      [['measures', 'Mesures'], ['newt', '+ Suivi'], ['back', 'Retour']],
   home:     [['hero', 'Héros'], ['char', 'Personnage'], ['look', 'Apparence'], ['skins', 'Tenues'], ['budgets', 'Budgets'], ['cats', 'Catégories'], ['save', 'Sauvegarde'], ['rules', 'Règles'], ['back', 'Retour']],
-  belvedere:[['wishes', 'Envies'], ['newwish', '+ Envie'], ['forecast', 'Prévisions'], ['tip', 'Un conseil'], ['back', 'Retour']],
+  belvedere:[['wishes', 'Wish list'], ['newwish', '+ Add'], ['forecast', 'Prévisions'], ['tip', 'Un conseil'], ['back', 'Retour']],
 };
 // L'heure où la session de la porte d'entrée expire (toutes les 15 minutes, le code est redemandé)
 const sessionExp = () => { const m = document.cookie.match(/(?:^|; )oq_exp=(\d+)/); return m ? +m[1] : null; };
@@ -1879,7 +1881,7 @@ function lineOf(place, g, quip) {
   if (place === 'archives') return say + `J'ai ${ms.count} dépense${ms.count > 1 ? 's' : ''} dans mes registres pour ${ymLabel(ms.ym)}.`;
   if (place === 'board') { const done = S.habits.filter(h => habitDone(t, h.id)).length; return say + `Avis à la population ! Quêtes du jour : ${done}/${S.habits.length}.`; }
   if (place === 'lab') { const n = S.trackers.filter(tr => S.trackerLog[t] && S.trackerLog[t][tr.id] != null).length; return say + `Bip ! ${n}/${S.trackers.length} mesure${S.trackers.length > 1 ? 's' : ''} prise${n > 1 ? 's' : ''} aujourd'hui.`; }
-  if (place === 'belvedere' && UI.sub !== 'tip') { const open = S.wishes.filter(w => !w.bought), f = forecast(g), low = f.reduce((a, r) => r.bal < a.bal ? r : a, f[0]); return open.length ? `Ma longue-vue voit ${open.length} envie${open.length > 1 ? 's' : ''} à l'horizon, pour ${fmt(open.reduce((a, w) => a + w.price, 0))}. ${low.bal < 0 ? `Attention : ta trésorerie passerait à ${fmt(low.bal)} en ${ymLabel(low.ym)}.` : `Ta trésorerie ne descend pas sous ${fmt(low.bal)} sur l'année.`}` : 'Ma longue-vue regarde l\'avenir. Note tes envies et tes projets : je te dirai quand tu pourras te les offrir.'; }
+  if (place === 'belvedere' && UI.sub !== 'tip') { const open = S.wishes.filter(w => !w.bought && w.catId !== WISH_IN), f = forecast(g), low = f.reduce((a, r) => r.bal < a.bal ? r : a, f[0]); return open.length ? `Ma longue-vue voit ${open.length} projet${open.length > 1 ? 's' : ''} dans ta Wish list, pour ${fmt(open.reduce((a, w) => a + w.price, 0))}. ${low.bal < 0 ? `Attention : ta trésorerie passerait à ${fmt(low.bal)} en ${ymLabel(low.ym)}.` : `Ta trésorerie ne descend pas sous ${fmt(low.bal)} sur l'année.`}` : 'Ma longue-vue regarde l\'avenir. Note tes projets dans la Wish list : je te dirai quand tu pourras te les offrir.'; }
   if (place === 'belvedere') return `« ${TIPS[UI.tipIdx % TIPS.length]} »`;
   return heroLine(g);
 }
@@ -1906,31 +1908,36 @@ function panelHTML(g) {
   if (p === 'belvedere') { if (s === 'wishes' || !s) return wishesPanel(g); if (s === 'newwish') return wishForm(); if (s === 'forecast') return forecastPanel(g); const nx = buildName(g.buildDays); return `<p>${esc(TIPS[UI.tipIdx % TIPS.length])}</p><p class="dim">La ville en contrebas compte ${g.buildDays} construction${g.buildDays > 1 ? 's' : ''}.${nx ? ` Prochaine : ${esc(nx)}${g.buildToday ? ' (en chantier aujourd\'hui)' : ''}.` : ' Le royaume est achevé.'}</p>`; }
   return '';
 }
+// Le type d'une ligne de la Wish list : une catégorie de budget, ou un encaissement / décaissement hors budget
+const WISH_IN = '@in', WISH_OUT = '@out', wishOff = w => w.catId === WISH_IN || w.catId === WISH_OUT;
 const WISH_ICON = '<svg class="gift" viewBox="0 0 8 8" width="16" height="16" shape-rendering="crispEdges" aria-hidden="true"><path fill="#e5484d" d="M1 3h6v5H1z"/><path fill="#ff6b70" d="M0 2h8v2H0z"/><path fill="#ffd166" d="M3 2h2v6H3zM2 0h1v2H2zM5 0h1v2H5z"/></svg>';
 function wishRow(w) {
-  const ms = monthStats(w.month), c = ms.cats.find(x => x.cat.id === w.catId), over = c && c.reserved > c.budget ? c.reserved - c.budget : 0, past = w.month < ymOf(today());
-  if (w.bought) return `<div class="li off">${WISH_ICON}<span class="grow">${esc(w.name)}<br><small class="dim">acheté le ${dayLabel(w.bought.date)}</small></span><b class="dim">${fmt(w.bought.amount)}</b><button class="x" data-act="delWish" data-id="${w.id}" aria-label="Supprimer">×</button></div>`;
-  return `<div class="li col"><div class="row between">${WISH_ICON}<button class="grow wish-name" data-act="editWish" data-id="${w.id}">${esc(w.name)}</button><b class="gold">${fmt(w.price)}</b></div>
-    <small class="${past ? 'red' : 'dim'}">${esc(ymLabel(w.month))} · ${c ? esc(c.cat.name) : 'catégorie supprimée'}${past ? ' · mois passé' : ''}${w.note ? ` · ${esc(w.note)}` : ''}</small>
-    ${over ? `<small class="red">Dépasse le budget ${esc(c.cat.name)} de ${esc(ymLabel(w.month))} (${fmt(c.budget)}) de ${fmt(over)}.</small>` : c ? `<small class="green">Réservé dans le budget ${esc(c.cat.name)} (${fmt(c.budget)}).</small>` : ''}
-    <div class="row">${over ? `<button class="ffbtn sm" data-act="fitWish" data-id="${w.id}" title="Monter le budget de ce mois juste assez">Ajuster</button>` : ''}<button class="ffbtn sm" data-act="buyWish" data-id="${w.id}">Acheté</button><button class="x" data-act="delWish" data-id="${w.id}" aria-label="Supprimer">×</button></div></div>`;
+  const past = w.month < ymOf(today()), inc = w.catId === WISH_IN, off = wishOff(w);
+  if (w.bought) return `<div class="li off">${inc ? '<span class="rf-dir green">↙</span>' : WISH_ICON}<span class="grow">${esc(w.name)}<br><small class="dim">${inc ? 'reçu' : off ? 'payé' : 'acheté'} le ${dayLabel(w.bought.date)}</small></span><b class="dim">${inc ? '+' : ''}${fmt(w.bought.amount)}</b><button class="x" data-act="delWish" data-id="${w.id}" aria-label="Supprimer">×</button></div>`;
+  const ms = off ? null : monthStats(w.month), c = ms && ms.cats.find(x => x.cat.id === w.catId), over = c && c.reserved > c.budget ? c.reserved - c.budget : 0;
+  const type = inc ? 'Encaissement' : w.catId === WISH_OUT ? 'Décaissement hors budget' : c ? c.cat.name : 'catégorie supprimée';
+  return `<div class="li col"><div class="row between">${inc ? '<span class="rf-dir green">↙</span>' : WISH_ICON}<button class="grow wish-name" data-act="editWish" data-id="${w.id}">${esc(w.name)}</button><b class="${inc ? 'green' : 'gold'}">${inc ? '+' : ''}${fmt(w.price)}</b></div>
+    <small class="${past ? 'red' : 'dim'}">${esc(ymLabel(w.month))} · ${esc(type)}${past ? ' · mois passé' : ''}${w.note ? ` · ${esc(w.note)}` : ''}</small>
+    ${off ? `<small class="dim">Hors budget : compté seulement dans les prévisions.</small>` : over ? `<small class="red">Dépasse le budget ${esc(c.cat.name)} de ${esc(ymLabel(w.month))} (${fmt(c.budget)}) de ${fmt(over)}.</small>` : c ? `<small class="green">Réservé dans le budget ${esc(c.cat.name)} (${fmt(c.budget)}).</small>` : ''}
+    <div class="row">${over ? `<button class="ffbtn sm" data-act="fitWish" data-id="${w.id}" title="Monter le budget de ce mois juste assez">Ajuster</button>` : ''}<button class="ffbtn sm" data-act="buyWish" data-id="${w.id}">${inc ? 'Reçu' : off ? 'Payé' : 'Acheté'}</button><button class="x" data-act="delWish" data-id="${w.id}" aria-label="Supprimer">×</button></div></div>`;
 }
 function wishesPanel(g) {
   const open = S.wishes.filter(w => !w.bought).sort((a, b) => a.month.localeCompare(b.month)), done = S.wishes.filter(w => w.bought).slice(-5).reverse();
-  return `<div class="row between wrap"><span class="gold">WISHLIST</span><b>${fmt(open.reduce((a, w) => a + w.price, 0))}</b></div>
-    <p class="dim">Chaque envie réserve son prix dans son budget, le mois prévu.</p>
-    ${open.length ? `<div class="list">${open.map(wishRow).join('')}</div>` : '<p class="dim">Aucune envie pour l\'instant. Choisis « + Envie ».</p>'}
-    ${done.length ? `<div class="gold">DÉJÀ OFFERTS</div><div class="list">${done.map(wishRow).join('')}</div>` : ''}`;
+  const outSum = open.filter(w => w.catId !== WISH_IN).reduce((a, w) => a + w.price, 0), inSum = open.filter(w => w.catId === WISH_IN).reduce((a, w) => a + w.price, 0);
+  return `<div class="row between wrap"><span class="gold">WISH LIST</span><b>${fmt(outSum)}</b></div>${inSum ? `<div class="row between"><span class="dim">Encaissements prévus</span><b class="green">+${fmt(inSum)}</b></div>` : ''}
+    <p class="dim">Une ligne liée à un budget y réserve son montant, le mois prévu. Encaissements et décaissements hors budget ne comptent que dans les prévisions.</p>
+    ${open.length ? `<div class="list">${open.map(wishRow).join('')}</div>` : '<p class="dim">Rien pour l\'instant. Choisis « + Add ».</p>'}
+    ${done.length ? `<div class="gold">DÉJÀ RÉALISÉS</div><div class="list">${done.map(wishRow).join('')}</div>` : ''}`;
 }
 function wishForm(w) {
   const m = w ? w.month : addMonths(ymOf(today()), 1), cat = w ? w.catId : (catOf('shop') ? 'shop' : S.categories[0].id);
-  return `<form data-form="wish" ${w ? `data-id="${w.id}"` : ''} autocomplete="off"><div class="gold">${w ? 'MODIFIER L\'ENVIE' : 'NOUVELLE ENVIE'}</div>
-    <input name="name" class="full" placeholder="Quoi ? (téléphone, voyage, vélo…)" maxlength="60" required value="${w ? esc(w.name) : ''}">
-    <div class="row"><input class="amount" name="amount" inputmode="numeric" placeholder="Prix estimé" aria-label="Prix" value="${w ? num(w.price) : ''}"><span class="gold">F</span></div>
-    <label class="dim">Dans quel budget ?</label><select name="catId" class="full">${S.categories.map(c => `<option value="${c.id}" ${c.id === cat ? 'selected' : ''}>${esc(c.name)} (${fmt(getBudget(m, c))} par mois)</option>`).join('')}</select>
+  return `<form data-form="wish" ${w ? `data-id="${w.id}"` : ''} autocomplete="off"><div class="gold">${w ? 'MODIFIER' : 'AJOUTER À LA WISH LIST'}</div>
+    <input name="name" class="full" placeholder="Quoi ? (téléphone, voyage, prime…)" maxlength="60" required value="${w ? esc(w.name) : ''}">
+    <div class="row"><input class="amount" name="amount" inputmode="numeric" placeholder="Montant estimé" aria-label="Montant" value="${w ? num(w.price) : ''}"><span class="gold">F</span></div>
+    <label class="dim">Type</label><select name="catId" class="full"><optgroup label="Hors budget (prévisions seulement)"><option value="${WISH_IN}" ${cat === WISH_IN ? 'selected' : ''}>↙ Encaissement</option><option value="${WISH_OUT}" ${cat === WISH_OUT ? 'selected' : ''}>↗ Décaissement</option></optgroup><optgroup label="Dans un budget (réserve le montant)">${S.categories.map(c => `<option value="${c.id}" ${c.id === cat ? 'selected' : ''}>${esc(c.name)} (${fmt(getBudget(m, c))} par mois)</option>`).join('')}</optgroup></select>
     <label class="dim">Pour quel mois ?</label><input type="month" name="month" class="full" value="${m}" min="${ymOf(today())}" required>
     <input name="note" class="full" placeholder="Note ou lien (facultatif)" maxlength="120" value="${w ? esc(w.note || '') : ''}">
-    <div class="row"><button class="ffbtn grow">${w ? 'Enregistrer' : 'Ajouter à la wishlist'}</button>${w ? '<button type="button" class="ffbtn" data-act="closeModal">Annuler</button>' : ''}</div></form>`;
+    <div class="row"><button class="ffbtn grow">${w ? 'Enregistrer' : 'Ajouter'}</button>${w ? '<button type="button" class="ffbtn" data-act="closeModal">Annuler</button>' : ''}</div></form>`;
 }
 // Les prévisions : trois chiffres, une petite courbe, et le détail mois par mois si on le veut
 const monthShort = ym => { const n = ymLabel(ym).split(' ')[0]; return (n.length > 4 ? n.slice(0, 4) + '.' : n) + ' ' + ym.slice(2, 4); };
@@ -1945,11 +1952,11 @@ function forecastPanel(g) { // les prévisions : trois chiffres et une barre par
     <p class="dim">Ta trésorerie à la fin de chaque mois, si tu dépenses tous tes budgets et reçois ${fmt(inc)} par mois.</p>
     <div class="fstats">${tile('Aujourd\'hui', start)}${tile('Au plus bas', low.bal, low.bal < 0 ? 'red' : '', monthShort(low.ym))}${tile('Dans 12 mois', end.bal, end.bal < 0 ? 'red' : '')}</div>
     <div class="fbars" style="--zero:${zero.toFixed(1)}%">${bars}</div>
-    <p class="ftip" id="ftip">Touche une barre pour voir le mois. <span class="fkey"><em></em> une envie tombe ce mois-là</span></p>
-    ${low.bal < 0 ? `<p class="red">Tu passerais sous zéro en ${esc(ymLabel(low.ym))}. Repousse une envie, ajuste un budget ou prévois une rentrée.</p>` : ''}
+    <p class="ftip" id="ftip">Touche une barre pour voir le mois. <span class="fkey"><em></em> une ligne de la Wish list tombe ce mois-là</span></p>
+    ${low.bal < 0 ? `<p class="red">Tu passerais sous zéro en ${esc(ymLabel(low.ym))}. Repousse une ligne de la Wish list, ajuste un budget ou prévois une rentrée.</p>` : ''}
     ${g.netCash == null ? '<p class="red">Ta trésorerie de départ n\'est pas définie : les barres partent de 0.</p>' : ''}
     <form data-form="income-plan"><label class="dim">Revenu mensuel prévu${S.expectedIncome == null && inc ? ' (moyenne de tes rentrées récentes)' : ''}</label><div class="row"><input name="amount" class="amount" inputmode="numeric" value="${S.expectedIncome == null ? '' : num(S.expectedIncome)}" placeholder="${num(inc)}"><span class="gold">F</span><button class="ffbtn sm">OK</button></div></form>
-    <details class="fdetail"><summary>Mois par mois</summary><div class="kv fc">${f.map(r => `<span>${esc(ymLabel(r.ym))}${r.wishes.length ? ` · ${r.wishes.map(w => esc(w.name)).join(', ')}` : ''}</span><b class="${r.bal < 0 ? 'red' : ''}">${fmt(r.bal)}</b>`).join('')}</div><p class="dim">Chaque mois : + revenu prévu − budgets du mois (une envie plus chère que son budget pèse en plus). Départ : la trésorerie nette.</p></details>`;
+    <details class="fdetail"><summary>Mois par mois</summary><div class="kv fc">${f.map(r => `<span>${esc(ymLabel(r.ym))}${r.wishes.length ? ` · ${r.wishes.map(w => esc(w.name)).join(', ')}` : ''}</span><b class="${r.bal < 0 ? 'red' : ''}">${fmt(r.bal)}</b>`).join('')}</div><p class="dim">Chaque mois : + revenu prévu + encaissements de la Wish list − budgets du mois − décaissements hors budget (une ligne plus chère que son budget pèse en plus). Départ : la trésorerie nette.</p></details>`;
 }
 // Toucher ou survoler une barre : le mois, la trésorerie prévue et les envies s'affichent dessous
 function forecastPoint(e) {
@@ -2043,7 +2050,7 @@ function refundRow(r) {
   const rest = refundRest(r), owed = r.dir === 'owed', done = rest === 0;
   return `<div class="li ${done ? 'off' : ''}"><span class="rf-dir ${owed ? 'green' : 'red'}" title="${owed ? 'On me doit' : 'Je dois'}">${owed ? '↙' : '↗'}</span><span class="grow">${esc(r.who)}${r.note ? ` · ${esc(r.note)}` : ''}<br><small class="dim">${owed ? 'avancé' : r.how === 'cash' ? 'prêté' : 'payé pour moi'} le ${dayLabel(r.date)}${r.addCash ? ' · compté dans la trésorerie' : ''}${r.pays.length ? ` · ${done ? 'réglé' : `${fmt(r.amount - rest)} déjà rendus`}` : ''}</small></span><b class="${done ? 'dim' : owed ? 'green' : 'red'}">${fmt(done ? r.amount : rest)}</b>${done ? '' : `<button class="ffbtn sm" data-act="refundPay" data-id="${r.id}" title="${owed ? 'Marquer remboursé' : "J'ai remboursé"}">✓</button>`}<button class="x" data-act="delRefund" data-id="${r.id}" aria-label="Supprimer">×</button></div>`;
 }
-const FLOW_KINDS = {gift: ['↗', "J'ai fait un don", 'red'], save: ['⇣', 'Mis de côté (épargne)', 'red'], withdraw: ['⇡', "Retiré de l'épargne", 'green']};
+const FLOW_KINDS = {spend: ['↗', 'Décaissement hors budget', 'red'], gift: ['↗', "J'ai fait un don", 'red'], save: ['⇣', 'Mis de côté (épargne)', 'red'], withdraw: ['⇡', "Retiré de l'épargne", 'green']};
 function flowRow(x) { const [ic, label, col] = FLOW_KINDS[x.kind], sign = x.kind === 'withdraw' ? '+' : '−';
   return `<div class="li"><span class="rf-dir ${col}">${ic}</span><span class="grow">${esc(x.kind === 'gift' && x.who ? `Don à ${x.who}` : label)}${x.note ? ` · ${esc(x.note)}` : ''}<br><small class="dim">${dayLabel(x.date)}</small></span><b class="${col}">${sign}${fmt(x.amount)}</b><button class="x" data-act="delFlow" data-id="${x.id}" aria-label="Supprimer">×</button></div>`; }
 function refundPanel(g) { // les autres flux, hors budget : remboursements, dons, épargne ; seule la trésorerie bouge
@@ -2060,7 +2067,7 @@ function refundPanel(g) { // les autres flux, hors budget : remboursements, dons
       <input name="note" class="full" placeholder="Pour quoi ? (facultatif)" maxlength="60">
       <label class="check f-cash"><input type="checkbox" name="addCash"><span>Pas encore dans ma trésorerie <small class="dim">(prêt ou avance fait après ma trésorerie de départ)</small></span></label>
       <div class="row"><input type="date" name="date" class="grow" value="${today()}"><button class="ffbtn">Ajouter</button></div></form>
-    ${g.gifts || g.saved || g.withdrawn || g.savingsBal ? `<div class="gold">DONS ET ÉPARGNE</div><div class="kv">${g.gifts ? `<span>Dons faits</span><b class="red">−${fmt(g.gifts)}</b>` : ''}${g.saved || g.withdrawn ? `<span>Épargne : mis de côté − retiré</span><b>${fmtS(g.saved - g.withdrawn)}</b>` : ''}<span class="gold">Épargne totale</span><b class="gold">${fmt(g.savingsBal)}</b></div>${flows.length ? `<div class="list">${flows.map(flowRow).join('')}</div>` : ''}` : ''}
+    ${g.gifts || g.saved || g.withdrawn || g.savingsBal ? `<div class="gold">DONS ET ÉPARGNE</div><div class="kv">${g.gifts ? `<span>Dons et décaissements hors budget</span><b class="red">−${fmt(g.gifts)}</b>` : ''}${g.saved || g.withdrawn ? `<span>Épargne : mis de côté − retiré</span><b>${fmtS(g.saved - g.withdrawn)}</b>` : ''}<span class="gold">Épargne totale</span><b class="gold">${fmt(g.savingsBal)}</b></div>${flows.length ? `<div class="list">${flows.map(flowRow).join('')}</div>` : ''}` : ''}
     <div class="gold">REMBOURSEMENTS · DÉJÀ RÉGLÉ</div><div class="kv"><span>Encaissé (on t'a remboursé)</span><b class="green">+${fmt(g.gotBack)}</b><span>Remboursé par toi</span><b class="${g.gaveBack ? 'red' : ''}">−${fmt(g.gaveBack)}</b><span class="gold">Solde réel</span><b class="${real < 0 ? 'red' : real > 0 ? 'green' : ''}">${fmtS(real)}</b></div>
     <div class="gold">REMBOURSEMENTS · ENCORE DÛ</div><div class="kv"><span>On te doit</span><b class="green">+${fmt(g.owedOpen)}</b><span>Tu dois</span><b class="${g.oweOpen ? 'red' : ''}">−${fmt(g.oweOpen)}</b><span class="gold">Solde théorique</span><b class="${g.pendingNet < 0 ? 'red' : g.pendingNet > 0 ? 'green' : ''}">${fmtS(g.pendingNet)}</b></div>
     <div class="gold">COMBINÉ</div><div class="kv"><span>Solde réel + théorique</span><b class="${real + g.pendingNet < 0 ? 'red' : real + g.pendingNet > 0 ? 'green' : ''}">${fmtS(real + g.pendingNet)}</b>${g.cash != null ? `<span>Trésorerie aujourd'hui</span><b>${fmt(g.cash)}</b><span class="gold">Si tout est remboursé et encaissé</span><b class="gold ${g.netCash < 0 ? 'red' : ''}">${fmt(g.netCash)}</b>` : ''}</div>
@@ -2078,7 +2085,7 @@ function cashPanel(g) { // la trésorerie : le solde du jour, et d'où il vient
   const sdShort = `${sd.slice(8, 10)}/${sd.slice(5, 7)}`;
   const head = `<div class="row between wrap"><span class="gold">TRÉSORERIE</span><b class="big ${g.cash != null && g.cash < 0 ? 'red' : ''}">${g.cash == null ? '—' : fmt(g.cash)}</b></div>`;
   const calc = g.cash == null ? '<p class="dim">Indique combien tu as aujourd\'hui : la trésorerie suivra ensuite tes dépenses, tes rentrées et tes remboursements.</p>'
-    : `<div class="kv"><span>Départ (${sdShort})</span><b>${fmt(S.startCash)}</b><span>+ Rentrées</span><b class="green">${fmt(g.inc)}</b><span>− Dépenses</span><b class="red">${fmt(g.out)}</b>${g.loansIn ? `<span>+ Prêts reçus</span><b class="green">${fmt(g.loansIn)}</b>` : ''}${g.advancesOut ? `<span>− Avances faites</span><b class="red">${fmt(g.advancesOut)}</b>` : ''}${g.repaidIn ? `<span>+ Remboursements reçus</span><b class="green">${fmt(g.repaidIn)}</b>` : ''}${g.repaidOut ? `<span>− Remboursements versés</span><b class="red">${fmt(g.repaidOut)}</b>` : ''}${g.gifts ? `<span>− Dons faits</span><b class="red">${fmt(g.gifts)}</b>` : ''}${g.saved ? `<span>− Mis de côté</span><b class="red">${fmt(g.saved)}</b>` : ''}${g.withdrawn ? `<span>+ Retiré de l'épargne</span><b class="green">${fmt(g.withdrawn)}</b>` : ''}<span class="gold">= Disponible</span><b class="gold">${fmt(g.cash)}</b>${g.savingsBal ? `<span>Épargne de côté</span><b>${fmt(g.savingsBal)}</b>` : ''}</div>
+    : `<div class="kv"><span>Départ (${sdShort})</span><b>${fmt(S.startCash)}</b><span>+ Rentrées</span><b class="green">${fmt(g.inc)}</b><span>− Dépenses</span><b class="red">${fmt(g.out)}</b>${g.loansIn ? `<span>+ Prêts reçus</span><b class="green">${fmt(g.loansIn)}</b>` : ''}${g.advancesOut ? `<span>− Avances faites</span><b class="red">${fmt(g.advancesOut)}</b>` : ''}${g.repaidIn ? `<span>+ Remboursements reçus</span><b class="green">${fmt(g.repaidIn)}</b>` : ''}${g.repaidOut ? `<span>− Remboursements versés</span><b class="red">${fmt(g.repaidOut)}</b>` : ''}${g.gifts ? `<span>− Dons et décaissements hors budget</span><b class="red">${fmt(g.gifts)}</b>` : ''}${g.saved ? `<span>− Mis de côté</span><b class="red">${fmt(g.saved)}</b>` : ''}${g.withdrawn ? `<span>+ Retiré de l'épargne</span><b class="green">${fmt(g.withdrawn)}</b>` : ''}<span class="gold">= Disponible</span><b class="gold">${fmt(g.cash)}</b>${g.savingsBal ? `<span>Épargne de côté</span><b>${fmt(g.savingsBal)}</b>` : ''}</div>
       ${g.pendingNet || g.owedOpen || g.oweOpen ? `<div class="kv">${g.owedOpen ? `<span>+ On te doit encore</span><b class="green">${fmt(g.owedOpen)}</b>` : ''}${g.oweOpen ? `<span>− Tu dois encore</span><b class="red">${fmt(g.oweOpen)}</b>` : ''}<span>Remboursements en attente</span><b class="${g.pendingNet < 0 ? 'red' : 'green'}">${fmtS(g.pendingNet)}</b><span class="gold">= Si tout est remboursé et encaissé</span><b class="gold ${g.netCash < 0 ? 'red' : ''}">${fmt(g.netCash)}</b></div><p class="dim">La trésorerie nette, c'est ce qui te restera une fois tous les remboursements réglés.</p>` : ''}
       ${beforeSum ? `<p class="dim">${before.length > 1 ? `${before.length} dépenses de ce mois (${fmt(beforeSum)}) datent d'avant le départ : elles ne sont pas déduites` : `1 dépense de ce mois (${fmt(beforeSum)}) date d'avant le départ : elle n'est pas déduite`}. Recule la date de départ au 1er du mois si elle${before.length > 1 ? 's doivent' : ' doit'} compter.</p>` : ''}
       <div class="kv"><span>Fin du mois, budget épuisé${g.pendingNet ? ' (net)' : ''}</span><b>${fmt(g.netCash - Math.max(0, ms.remaining))}</b></div>`;
@@ -2241,8 +2248,8 @@ const ACT = {
   goConfig: () => { if (UI.place === 'home') closePlace(); else openPlace('home'); },
   goWish: () => { if (UI.place === 'belvedere') closePlace(); else openPlace('belvedere', 'wishes'); },
   editWish: a => { const w = S.wishes.find(x => x.id === a.dataset.id); if (w) modal(wishForm(w)); },
-  delWish: a => { const w = S.wishes.find(x => x.id === a.dataset.id); if (w && confirm(`Retirer « ${w.name} » de la wishlist ?`)) { S.wishes = S.wishes.filter(x => x !== w); commit(); } },
-  buyWish: a => { const w = S.wishes.find(x => x.id === a.dataset.id); if (!w) return; modal(`<div class="gold">${esc(w.name.toUpperCase())} : ACHETÉ</div><p class="dim">L'envie devient une dépense dans ${esc((catOf(w.catId) || {}).name || '—')}, et sa réservation est libérée.</p><form data-form="buyWish" data-id="${w.id}" autocomplete="off"><div class="row"><input name="amount" class="amount" inputmode="numeric" value="${num(w.price)}" aria-label="Prix payé"><span class="gold">F</span></div><input name="date" type="date" class="full" value="${today()}"><div class="row"><button class="ffbtn grow">Noter l'achat</button><button type="button" class="ffbtn" data-act="closeModal">Annuler</button></div></form>`); },
+  delWish: a => { const w = S.wishes.find(x => x.id === a.dataset.id); if (w && confirm(`Retirer « ${w.name} » de la Wish list ?`)) { S.wishes = S.wishes.filter(x => x !== w); commit(); } },
+  buyWish: a => { const w = S.wishes.find(x => x.id === a.dataset.id); if (!w) return; const inc = w.catId === WISH_IN, off = wishOff(w); modal(`<div class="gold">${esc(w.name.toUpperCase())} : ${inc ? 'REÇU' : off ? 'PAYÉ' : 'ACHETÉ'}</div><p class="dim">${inc ? 'La ligne devient un encaissement : la trésorerie monte.' : off ? 'La ligne devient un décaissement hors budget (Autres flux) : la trésorerie baisse, le budget ne bouge pas.' : `La ligne devient une dépense dans ${esc((catOf(w.catId) || {}).name || '—')}, et sa réservation est libérée.`}</p><form data-form="buyWish" data-id="${w.id}" autocomplete="off"><div class="row"><input name="amount" class="amount" inputmode="numeric" value="${num(w.price)}" aria-label="Prix payé"><span class="gold">F</span></div><input name="date" type="date" class="full" value="${today()}"><div class="row"><button class="ffbtn grow">${inc ? 'Noter la rentrée' : off ? 'Noter le paiement' : 'Noter l\'achat'}</button><button type="button" class="ffbtn" data-act="closeModal">Annuler</button></div></form>`); },
   fitWish: a => { // monte le budget de la catégorie pour ce seul mois, juste assez pour l'envie
     const w = S.wishes.find(x => x.id === a.dataset.id); if (!w) return; const c = catOf(w.catId); if (!c) return;
     const ms = monthStats(w.month), mc = ms.cats.find(x => x.cat.id === c.id), need = mc.reserved, old = getBudget(w.month, c), next = addMonths(w.month, 1);
@@ -2305,17 +2312,19 @@ document.addEventListener('submit', e => {
   else if (k === 'welcome') { S.onboarded = true; S.heroName = v('name').trim().slice(0, 20) || CHARS[heroChar()].name; const c = v('cash'); if (c.trim()) { S.startCash = parseAmt(c); S.startDate = today(); } UI.welcomeCash = ''; closeModal(); save(true); renderUI(); progress(UI.game, true); UI.dlg = idleDlg(); renderUI(); }
   else if (k === 'unlock') { unlock(v('code')); }
   else if (k === 'wish') {
-    const name = v('name').trim().slice(0, 60), price = parseAmt(v('amount')), month = /^\d{4}-\d{2}$/.test(v('month')) ? v('month') : addMonths(ymOf(today()), 1), catId = catOf(v('catId')) ? v('catId') : S.categories[0].id;
-    if (!name) { toast('Quoi ?', 'Donne un nom à ton envie.'); return; } if (!price) { toast('Prix ?', 'Indique un prix estimé.'); return; }
+    const name = v('name').trim().slice(0, 60), price = parseAmt(v('amount')), month = /^\d{4}-\d{2}$/.test(v('month')) ? v('month') : addMonths(ymOf(today()), 1), catId = [WISH_IN, WISH_OUT].includes(v('catId')) || catOf(v('catId')) ? v('catId') : S.categories[0].id;
+    if (!name) { toast('Quoi ?', 'Donne un nom à cette ligne.'); return; } if (!price) { toast('Montant ?', 'Indique un montant estimé.'); return; }
     const w = f.dataset.id && S.wishes.find(x => x.id === f.dataset.id);
     if (w) { Object.assign(w, {name, price, month, catId, note: v('note').trim().slice(0, 120)}); closeModal(); }
     else S.wishes.push({id: uid(), name, price, catId, month, note: v('note').trim().slice(0, 120), bought: null});
-    SFX.quest(); toast(w ? 'Envie modifiée' : 'Ajouté à la wishlist', `${name} : ${fmt(price)} réservés en ${ymLabel(month)}.`); UI.sub = 'wishes'; commit();
+    SFX.quest(); toast(w ? 'Modifié' : 'Ajouté à la Wish list', catId === WISH_IN ? `${name} : +${fmt(price)} prévus en ${ymLabel(month)}.` : catId === WISH_OUT ? `${name} : ${fmt(price)} prévus en ${ymLabel(month)}, hors budget.` : `${name} : ${fmt(price)} réservés en ${ymLabel(month)}.`); UI.sub = 'wishes'; commit();
   }
   else if (k === 'buyWish') {
     const w = S.wishes.find(x => x.id === f.dataset.id); if (!w) return; const amount = parseAmt(v('amount')) || w.price, date = v('date') || today(), id = uid();
+    if (w.catId === WISH_IN) { S.incomes.push({id, date, amount, cat: 'autre', note: w.name, ts: Date.now(), wishId: w.id}); w.bought = {date, amount, incId: id}; closeModal(); SFX.quest(); toast('Encaissement reçu', `${w.name} : +${fmt(amount)} dans la trésorerie.`); return commit(); }
+    if (w.catId === WISH_OUT) { S.flows.push({id, kind: 'spend', amount, date, who: '', note: w.name}); w.bought = {date, amount, flowId: id}; closeModal(); SFX.coin(); toast('Décaissement payé', `${w.name} : −${fmt(amount)} de la trésorerie, hors budget.`); return commit(); }
     S.expenses.push({id, date, amount, catId: catOf(w.catId) ? w.catId : S.categories[0].id, note: '🎁 ' + w.name, ts: Date.now(), wishId: w.id}); delete S.checkins[date];
-    w.bought = {date, amount, expId: id}; closeModal(); fanfare(); toast('Envie réalisée !', `${w.name} : ${fmt(amount)} noté en dépense.`); commit();
+    w.bought = {date, amount, expId: id}; closeModal(); fanfare(); toast('Réalisé !', `${w.name} : ${fmt(amount)} noté en dépense.`); commit();
   }
   else if (k === 'income-plan') { const c = v('amount'); S.expectedIncome = c.trim() ? parseAmt(c) : null; SFX.coin(); commit(); }
   else if (k === 'refund') {

@@ -132,7 +132,7 @@ Tout passe par les fenêtres bleues du bas : on choisit avec la main, au doigt, 
 | **Quêtes** | Le Tableau des quêtes | Rook | Habitudes du jour, semaine, **progression**, trophées, nouvelle quête, **Gérer** (renommer, supprimer : l'XP déjà gagnée reste acquise) |
 | **Suivis** | Le Labo | Boulon | Compteurs personnalisés avec un objectif « au moins » ou « au plus » |
 | **Trésorerie** | La Banque | Hares | Le solde d'aujourd'hui et son calcul (départ, rentrées, dépenses, remboursements), ce qui reste dû, le départ à modifier |
-| **🎁 (en haut à droite)** | Le Belvédère | Merlain | La wishlist (envies et projets), les prévisions sur 12 mois, un conseil |
+| **🎁 (en haut à droite)** | Le Belvédère | Merlain | La Wish list (projets, encaissements et décaissements prévus), les prévisions sur 12 mois, un conseil |
 | **⚙ (en haut à droite de l'écran)** | La maison du héros | — | La configuration : héros, personnage, apparence, tenues, budgets, catégories, sauvegarde, règles |
 | — | Le Belvédère (à toucher dans la scène) | Merlain | Des conseils, et la prochaine construction de la vallée |
 
@@ -146,17 +146,22 @@ La barre d'état montre la trésorerie, les PV, le niveau avec sa jauge d'XP et 
 Trésorerie montre le détail, les dernières rentrées, et ce qui restera à la fin du mois si le budget est tenu.
 
 
-## La wishlist et les prévisions (bouton 🎁)
+## La Wish list et les prévisions (bouton 🎁)
 
-Le bouton **🎁**, à côté de ⚙ en haut à droite, ouvre le Belvédère : la longue-vue de Merlain regarde l'avenir.
+Le bouton **🎁**, à côté de ⚙ en haut à droite, ouvre le Belvédère : la longue-vue de Merlain regarde l'avenir. Onglets : **Wish list**, **+ Add**, **Prévisions**, Un conseil.
 
-**Envies** : chaque envie (ou projet) a un nom, un prix estimé, **la catégorie de budget** où elle tombe et **le mois prévu**.
-- Elle **réserve** son prix dans ce budget, ce mois-là : le budget du jour du mois baisse d'autant, pour que l'argent soit mis de côté au fil des jours.
-- Si elle coûte plus que le budget de sa catégorie, la ligne le signale ; **Ajuster** monte le budget de ce seul mois, juste assez (les autres mois ne changent pas).
-- **Acheté** : l'envie devient une vraie dépense (au prix réellement payé) et sa réservation disparaît. Écarts › Catégories montre les montants réservés.
+**+ Add** : un nom, un montant estimé, un **Type** et le mois prévu. Le Type est une seule liste :
+
+| Type | Effet |
+|---|---|
+| **↙ Encaissement** (hors budget) | Une rentrée attendue (prime, vente…) : elle s'ajoute aux **prévisions** du mois. « Reçu » la change en vraie rentrée. |
+| **↗ Décaissement** (hors budget) | Une sortie prévue hors budget (billet d'avion, frais…) : elle se retire des **prévisions** du mois. « Payé » la note dans Autres flux ; la trésorerie baisse. |
+| **Une catégorie de budget** | Elle **réserve** son montant dans ce budget ce mois-là : le budget du jour de ce mois baisse d'autant. « Ajuster » monte le budget de ce seul mois si elle le dépasse ; « Acheté » la change en dépense et libère la réservation. |
+
+Les encaissements et décaissements hors budget ne touchent ni le budget, ni le budget du jour : seulement les prévisions, puis la trésorerie quand ils sont réalisés.
 
 **Prévisions** : trois chiffres (aujourd'hui, au plus bas, dans 12 mois) et **une barre par mois** : la trésorerie prévue à la fin du mois, verte au-dessus de zéro, rouge en dessous, avec un point doré quand une envie tombe ce mois-là. Toucher une barre affiche le mois, la trésorerie, le revenu et les budgets comptés. Le détail mois par mois reste disponible en dessous.
-- Chaque mois : + le revenu mensuel prévu − les budgets du mois. Une envie plus chère que son budget pèse en plus. Le mois en cours ne compte que ce qui reste à dépenser.
+- Chaque mois : + le revenu mensuel prévu + les encaissements de la Wish list − les budgets du mois − les décaissements hors budget. Une ligne plus chère que son budget pèse en plus. Le mois en cours ne compte que ce qui reste à dépenser.
 - Le revenu prévu se règle sur l'écran ; sans réglage, c'est la moyenne des rentrées des trois derniers mois.
 - Si la courbe passe sous zéro, l'écran dit quand et de combien : de quoi repousser une envie, ajuster un budget ou prévoir une rentrée.
 
