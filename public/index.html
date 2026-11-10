@@ -65,7 +65,6 @@ body.wish .wishbtn{border-color:var(--gold)}
 .fbar.on span{color:#fff}
 .fkey{white-space:nowrap}.fkey em{position:relative;display:inline-block;left:0;margin:0 2px 0 6px}
 .fstats{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin:6px 0}
-.incplan{background:rgba(0,0,20,.3);border-radius:4px;padding:4px 8px;margin:6px 0}.incplan .row{margin:3px 0}.incplan .x{font-size:18px}
 .fstats.two{grid-template-columns:1fr 1fr}
 .fstats div{background:rgba(0,0,20,.3);border-radius:4px;padding:4px 6px;display:flex;flex-direction:column;min-width:0}
 .fstats small{font-size:15px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -864,7 +863,6 @@ function defaultState() {
     oldHabits: [],        // les quêtes supprimées : on les garde pour que leur XP reste acquise
     wishes: [],           // la wishlist : { id, name, price, catId, month: 'YYYY-MM', note, bought: null | {date, amount, expId} }
     expectedIncome: null, // revenu mensuel prévu, pour les prévisions
-    incomePlan: {},       // les changements de revenu prévu : { 'YYYY-MM': montant, valable ce mois et les suivants }
     refunds: [],
     goals: [],            // les objectifs d'épargne : { id, name, target, due: 'YYYY-MM', start: 'YYYY-MM', plan: {'YYYY-MM': versement mensuel, valable ce mois et les suivants} }
     flows: [],            // les autres flux hors budget : { id, kind: 'gift' (don fait) | 'save' (mis de côté) | 'withdraw' (retiré de l'épargne), amount, date, who, note }          // remboursements, hors budget : { id, dir: 'owed' (on me doit) | 'owe' (je dois), how, who, amount, date, note, pays: [{id, date, amount}] }
@@ -900,7 +898,7 @@ function migrate(s) {
   for (const k of Object.keys(d)) if (s[k] === undefined) s[k] = d[k];
   for (const k of ['categories','expenses','habits','trackers','seenAch','incomes','refunds','wishes','oldHabits','flows','goals']) if (!Array.isArray(s[k])) s[k] = d[k];
   if (s.expectedIncome != null && !isFinite(+s.expectedIncome)) s.expectedIncome = null;
-  if (!s.incomePlan || typeof s.incomePlan !== 'object' || Array.isArray(s.incomePlan)) s.incomePlan = {};
+  delete s.incomePlan; // les revenus datés ne sont plus utilisés : un seul revenu mensuel prévu
   if (s.startCash != null && !isFinite(+s.startCash)) s.startCash = null;
   if (typeof s.startDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s.startDate)) s.startDate = s.createdAt || today();
   for (const k of ['budgets','checkins','habitLog','trackerLog']) if (!s[k] || typeof s[k] !== 'object' || Array.isArray(s[k])) s[k] = {};
@@ -1028,8 +1026,8 @@ function getBudget(ym, cat) {
 const totalBudget = ym => S.categories.reduce((a, c) => a + getBudget(ym, c), 0);
 
 // Le revenu mensuel prévu : celui que tu as indiqué, sinon la moyenne des rentrées des trois derniers mois
-function expectedIncome(ym) { // le revenu prévu d'un mois : le dernier changement daté, sinon le revenu de base, sinon la moyenne des rentrées
-  if (ym) { let best = null; for (const k in S.incomePlan) if (k <= ym && (best === null || k > best)) best = k; if (best) return +S.incomePlan[best] || 0; }
+function expectedIncome(ym) { // le revenu prévu d'un mois : celui que tu as réglé, sinon la moyenne des rentrées
+  if (ym && S.startCash != null && ym <= ymOf(S.startDate || today())) return 0; // le mois de la trésorerie d'ouverture : son salaire y est déjà
   if (S.expectedIncome != null) return S.expectedIncome;
   const ym0 = ymOf(today()), months = [1, 2, 3].map(k => addMonths(ym0, -k));
   const tot = S.incomes.filter(e => e.cat !== 'cadeau' && !e.wishId && months.includes(ymOf(e.date))).reduce((a, e) => a + e.amount, 0);
@@ -2073,25 +2071,22 @@ function wishForm(w) {
 // Les prévisions : trois chiffres, une petite courbe, et le détail mois par mois si on le veut
 const monthShort = ym => { const n = ymLabel(ym).split(' ')[0]; return (n.length > 4 ? n.slice(0, 4) + '.' : n) + ' ' + ym.slice(2, 4); };
 function forecastPanel(g) { // les prévisions : trois chiffres et une barre par mois (la trésorerie prévue en fin de mois)
-  const f = forecast(g), inc = expectedIncome(ymOf(today())), start = g.netCash == null ? 0 : g.netCash, low = f.reduce((a, r) => r.bal < a.bal ? r : a, f[0]), end = f[f.length - 1];
+  const f = forecast(g), inc = expectedIncome(), start = g.netCash == null ? 0 : g.netCash, low = f.reduce((a, r) => r.bal < a.bal ? r : a, f[0]), end = f[f.length - 1];
   const lo = Math.min(0, ...f.map(r => r.bal)), hi = Math.max(1, ...f.map(r => r.bal)), span = hi - lo, zero = hi / span * 100;
   const ini = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
   const bars = f.map((r, k) => { const h = Math.max(1.5, Math.abs(r.bal) / span * 100), neg = r.bal < 0;
     return `<button class="fbar ${neg ? 'neg' : ''}" data-k="${k}" aria-label="${esc(ymLabel(r.ym))} : ${fmt(r.bal)}"><i style="${neg ? `top:${zero}%` : `bottom:${100 - zero}%`};height:${h.toFixed(1)}%"></i>${r.wishes.length ? `<em style="${neg ? `top:${zero}%;margin-top:-10px` : `bottom:${(100 - zero + h).toFixed(1)}%`}"></em>` : ''}<span>${ini[+r.ym.slice(5) - 1]}</span></button>`; }).join('');
   const tile = (label, v, cls = '', sub = '') => `<div><small>${label}</small><b class="${cls}">${fmt(v)}</b>${sub ? `<small>${sub}</small>` : ''}</div>`;
-  const changes = Object.entries(S.incomePlan).sort((a, b) => a[0].localeCompare(b[0]));
-  const incForm = `<form data-form="income-plan" class="incplan" autocomplete="off"><label class="dim">Revenu mensuel prévu${S.expectedIncome == null && !changes.length && inc ? ' (estimé d\'après tes rentrées récentes)' : ''}</label>
-    <div class="row"><input name="amount" class="amount" inputmode="numeric" value="${num(inc)}" aria-label="Revenu mensuel prévu"><span class="gold">F</span></div>
-    <div class="row"><span class="dim">à partir de</span><input type="month" name="from" class="grow" value="${ymOf(today())}" min="${ymOf(today())}"><button class="ffbtn sm">Valider</button></div>
-    ${changes.length ? `<div class="kv">${changes.map(([m, a]) => `<span>Dès ${esc(ymLabel(m))}</span><b>${fmt(a)} <button type="button" class="x" data-act="delIncPlan" data-m="${m}" aria-label="Retirer">×</button></b>`).join('')}</div>` : ''}</form>`;
-  return `<div class="gold">PRÉVISIONS · 12 MOIS</div>${incForm}
-    <p class="dim">Ta trésorerie disponible à la fin de chaque mois (hors épargne), si tu dépenses tous tes budgets et reçois le revenu prévu.</p>
+  return `<div class="gold">PRÉVISIONS · 12 MOIS</div>
+    <p class="dim">Ta trésorerie disponible à la fin de chaque mois (hors épargne), si tu dépenses tous tes budgets et reçois ${fmt(inc)} par mois.</p>
     <div class="fstats">${tile('Aujourd\'hui', start)}${tile('Au plus bas', low.bal, low.bal < 0 ? 'red' : '', monthShort(low.ym))}${tile('Dans 12 mois', end.bal, end.bal < 0 ? 'red' : '', 'trésorerie dispo')}</div>
     ${S.goals.length ? `<div class="fstats two">${tile('Épargne dans 12 mois', end.sav, '', 'dans tes objectifs')}${tile('Total dans 12 mois', end.bal + end.sav, end.bal + end.sav < 0 ? 'red' : 'gold', 'trésorerie + épargne')}</div>` : ''}
     <div class="fbars" style="--zero:${zero.toFixed(1)}%">${bars}</div>
     <p class="ftip" id="ftip">Touche une barre pour voir le mois. <span class="fkey"><em></em> une ligne de la Wish list tombe ce mois-là</span></p>
     ${low.bal < 0 ? `<p class="red">Tu passerais sous zéro en ${esc(ymLabel(low.ym))}. Repousse une ligne de la Wish list, ajuste un budget ou prévois une rentrée.</p>` : ''}
     ${g.netCash == null ? '<p class="red">Ta trésorerie de départ n\'est pas définie : les barres partent de 0.</p>' : ''}
+    <form data-form="income-plan"><label class="dim">Revenu mensuel prévu${S.expectedIncome == null && inc ? ' (moyenne de tes rentrées récentes)' : ''}</label><div class="row"><input name="amount" class="amount" inputmode="numeric" value="${S.expectedIncome == null ? '' : num(S.expectedIncome)}" placeholder="${num(inc)}"><span class="gold">F</span><button class="ffbtn sm">OK</button></div></form>
+    ${S.startCash != null && ymOf(S.startDate || today()) >= ymOf(today()) ? `<p class="dim">${esc(ymLabel(ymOf(S.startDate || today())))} : pas de revenu ajouté, il est déjà dans ta trésorerie d'ouverture.</p>` : ''}
 
     <details class="fdetail"><summary>Mois par mois</summary><div class="kv fc">${f.map(r => `<span>${esc(ymLabel(r.ym))}${r.wishes.length ? ` · ${r.wishes.map(w => esc(w.name)).join(', ')}` : ''}</span><b class="${r.bal < 0 ? 'red' : ''}">${fmt(r.bal)}</b>`).join('')}</div><p class="dim">Chaque mois : + revenu prévu + encaissements de la Wish list − budgets du mois − décaissements hors budget (une ligne plus chère que son budget pèse en plus). Départ : la trésorerie nette.</p></details>`;
 }
@@ -2387,7 +2382,6 @@ const ACT = {
   goalEdit: a => modal(goalForm(a.dataset.id && goalOf(a.dataset.id))),
   goalDel: a => { const x = goalOf(a.dataset.id); if (!x || !confirm(`Supprimer l'objectif « ${x.name} » ? Ce qui est de côté (${fmt(goalBal(x))}) revient dans l'épargne libre.`)) return; S.flows.forEach(f => { if (f.goalId === x.id) delete f.goalId; }); S.goals = S.goals.filter(y => y !== x); commit(); },
   goalMove: a => { const x = goalOf(a.dataset.id); if (!x) return; const save = a.dataset.k === 'save'; modal(`<div class="gold">${save ? 'VERSER DANS' : 'RETIRER DE'} ${esc(x.name.toUpperCase())}</div><p class="dim">${save ? 'La trésorerie baisse, l\'objectif monte.' : 'L\'objectif baisse, la trésorerie remonte.'} De côté : ${fmt(goalBal(x))}.${save && goalRoom() !== Infinity ? ` Tu peux verser jusqu'à ${fmt(goalRoom())}.` : ''}</p><form data-form="goalMove" data-id="${x.id}" data-k="${a.dataset.k}" autocomplete="off"><div class="row"><input name="amount" class="amount" inputmode="numeric" placeholder="0"><span class="gold">F</span></div><input name="date" type="date" class="full" value="${today()}"><div class="row"><button class="ffbtn grow">OK</button><button type="button" class="ffbtn" data-act="closeModal">Annuler</button></div></form>`); },
-  delIncPlan: a => { delete S.incomePlan[a.dataset.m]; SFX.click(); commit(); },
   goWish: () => { if (UI.place === 'belvedere') closePlace(); else openPlace('belvedere', 'wishes'); },
   editWish: a => { const w = S.wishes.find(x => x.id === a.dataset.id); if (w) modal(wishForm(w)); },
   delWish: a => { const w = S.wishes.find(x => x.id === a.dataset.id); if (w && confirm(`Retirer « ${w.name} » de la Wish list ?`)) { S.wishes = S.wishes.filter(x => x !== w); commit(); } },
@@ -2484,7 +2478,7 @@ document.addEventListener('submit', e => {
     S.expenses.push({id, date, amount, catId: catOf(w.catId) ? w.catId : S.categories[0].id, note: '🎁 ' + w.name, ts: Date.now(), wishId: w.id}); delete S.checkins[date];
     w.bought = {date, amount, expId: id}; closeModal(); fanfare(); toast('Réalisé !', `${w.name} : ${fmt(amount)} noté en dépense.`); commit();
   }
-  else if (k === 'income-plan') { const a = parseAmt(v('amount')), from = /^\d{4}-\d{2}$/.test(v('from')) ? v('from') : ymOf(today()); if (from <= ymOf(today())) { S.expectedIncome = a; for (const m in S.incomePlan) if (m <= from) delete S.incomePlan[m]; } else S.incomePlan[from] = a; SFX.coin(); toast('Revenu prévu', `${fmt(a)} par mois à partir de ${ymLabel(from)}.`); commit(); }
+  else if (k === 'income-plan') { const c = v('amount'); S.expectedIncome = c.trim() ? parseAmt(c) : null; SFX.coin(); commit(); }
   else if (k === 'refund') {
     const amount = parseAmt(v('amount')), who = v('who').trim().slice(0, 40), kind = v('kind') || 'owed'; UI.flowKind = kind;
     if (FLOW_KINDS[kind]) { // don, épargne
