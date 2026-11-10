@@ -173,6 +173,25 @@ Marché › **Noter** commence par le sens du mouvement :
 
 Récentes montre les deux, mêlés par date.
 
+## Les objectifs d'épargne (🎁 › Objectifs)
+
+Chaque objectif (Urgence, Logement, Mariage…) a une **cible**, une **échéance** et un **versement mensuel** :
+- au début de chaque mois, le versement prévu est **mis de côté tout seul** : la trésorerie baisse d'autant, l'objectif monte (le budget du jour ne bouge pas) ;
+- une **barre de progression** montre où il en est, le mois où il sera atteint à ce rythme, et prévient s'il arrive après l'échéance ;
+- **Verser** et **Retirer** à la main, **Modifier** la cible, l'échéance ou le versement (à partir du mois en cours) ;
+- une ligne de la Wish list peut être **payée par un objectif** (Type « ◆ Logement »…) : l'argent sort de l'objectif, la trésorerie ne bouge pas ;
+- les prévisions retirent chaque mois les versements prévus.
+
+## Le plan (⚙ › Plan)
+
+Un bouton **Appliquer le plan** met en place le plan budgétaire en un geste :
+- **Budgets** : phase 1 dès décembre 2026 (chez les parents : alimentation 70 k, carburant et transport 60 k, téléphone et internet 20 k, couple 120 k, famille 40 k, santé et perso 30 k, imprévus 40 k = 380 k), phase 2 dès juillet 2027 (appartement : loyer 150 k, charges 45 k, alimentation 110 k = 615 k) ;
+- **Revenu prévu** : 850 000 F (salaire net de l'échéance du prêt) ;
+- **Objectifs** : Urgence (1 M), Logement (2 M pour juillet 2027), Mariage (3,5 M pour novembre 2028), avec leurs versements automatiques ;
+- **Wish list** : réparation voiture (470 k en décembre, 90 k en janvier) et écran MacBook (230 k en janvier) sur la trésorerie ; caution et équipement payés par l'objectif Logement ; démarches et cérémonie payées par l'objectif Mariage.
+
+Les catégories existantes sont renommées (Transport → Carburant & transport, Factures → Téléphone & internet, Loisirs → Couple, Divers → Imprévus, Santé → Santé & perso, Logement → Loyer) ; Famille et Charges maison sont créées ; les autres passent à 0 dès décembre. Les dépenses déjà notées ne bougent pas, et appliquer le plan deux fois ne crée pas de doublon.
+
 ## Les autres flux (hors budget)
 
 Marché › **Autres flux** regroupe ce qui touche la trésorerie **sans toucher au budget** : ni le budget du jour, ni l'XP, ni la météo, ni la ville en contrebas ne bougent.
