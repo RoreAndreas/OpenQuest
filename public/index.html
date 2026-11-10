@@ -65,6 +65,8 @@ body.wish .wishbtn{border-color:var(--gold)}
 .fbar.on span{color:#fff}
 .fkey{white-space:nowrap}.fkey em{position:relative;display:inline-block;left:0;margin:0 2px 0 6px}
 .fstats{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin:6px 0}
+.incplan{background:rgba(0,0,20,.3);border-radius:4px;padding:4px 8px;margin:6px 0}.incplan .row{margin:3px 0}.incplan .x{font-size:18px}
+.fstats.two{grid-template-columns:1fr 1fr}
 .fstats div{background:rgba(0,0,20,.3);border-radius:4px;padding:4px 6px;display:flex;flex-direction:column;min-width:0}
 .fstats small{font-size:15px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fstats b{font-family:var(--px);font-size:9px;font-weight:normal;margin-top:3px;white-space:nowrap}
@@ -543,6 +545,7 @@ const SKINS = {
   or:       {name:'Doré', body:'#ffcd75', arm:'#ffe3a3', cape:'#ef7d57', gold:'#fff1b0'},
   ombre:    {name:'Ombre', head:'#2b2b33', body:'#3d3d48', arm:'#4e5459', cape:'#5d275d', tip:'#b86fd6', hood:'#1a1c2c', add:['hood']},
   royal:    {name:'Royal', cape:'#b13e53', tip:'#b13e53', add:['crown']},
+  tresor:   {name:'Gardien du trésor', cape:'#ffd166', tip:'#ffd166', gold:'#fff1b0', add:['star', 'epaulettes', 'crown']},
   legende:  {name:'Légende', body:'#f7f5fc', cape:'#73eff7', tip:'#73eff7', eyes:'#73eff7', add:['crown', 'chestLight']},
 };
 const heroLook = () => ({...DEFAULT_LOOK, ...((S && S.world && S.world.look) || {})});
@@ -861,6 +864,7 @@ function defaultState() {
     oldHabits: [],        // les quêtes supprimées : on les garde pour que leur XP reste acquise
     wishes: [],           // la wishlist : { id, name, price, catId, month: 'YYYY-MM', note, bought: null | {date, amount, expId} }
     expectedIncome: null, // revenu mensuel prévu, pour les prévisions
+    incomePlan: {},       // les changements de revenu prévu : { 'YYYY-MM': montant, valable ce mois et les suivants }
     refunds: [],
     goals: [],            // les objectifs d'épargne : { id, name, target, due: 'YYYY-MM', start: 'YYYY-MM', plan: {'YYYY-MM': versement mensuel, valable ce mois et les suivants} }
     flows: [],            // les autres flux hors budget : { id, kind: 'gift' (don fait) | 'save' (mis de côté) | 'withdraw' (retiré de l'épargne), amount, date, who, note }          // remboursements, hors budget : { id, dir: 'owed' (on me doit) | 'owe' (je dois), how, who, amount, date, note, pays: [{id, date, amount}] }
@@ -896,6 +900,7 @@ function migrate(s) {
   for (const k of Object.keys(d)) if (s[k] === undefined) s[k] = d[k];
   for (const k of ['categories','expenses','habits','trackers','seenAch','incomes','refunds','wishes','oldHabits','flows','goals']) if (!Array.isArray(s[k])) s[k] = d[k];
   if (s.expectedIncome != null && !isFinite(+s.expectedIncome)) s.expectedIncome = null;
+  if (!s.incomePlan || typeof s.incomePlan !== 'object' || Array.isArray(s.incomePlan)) s.incomePlan = {};
   if (s.startCash != null && !isFinite(+s.startCash)) s.startCash = null;
   if (typeof s.startDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s.startDate)) s.startDate = s.createdAt || today();
   for (const k of ['budgets','checkins','habitLog','trackerLog']) if (!s[k] || typeof s[k] !== 'object' || Array.isArray(s[k])) s[k] = {};
@@ -964,7 +969,7 @@ async function syncPull() {
     const {etat} = await r.json(), remote = etat ? migrate(JSON.parse(etat)) : null;
     if (remote && (remote.savedAt || 0) > (S.savedAt || 0)) { // la copie en ligne est plus récente : on la reprend
       const fresh = !S.onboarded;
-      S = remote; save(false); SYNC.last = Date.now(); if (autoGoals()) save(true);
+      S = remote; save(false); SYNC.last = Date.now(); if (autoGoals() | goalMilestones()) save(true);
       SCENE.key = ''; SCENE.walkers = [];
       if (fresh || !$('#modal').hidden) closeModal();
       UI.dlg = null; renderUI(); progress(UI.game, true);
@@ -982,19 +987,38 @@ async function syncPull() {
 const goalOf = id => S.goals.find(x => x.id === id);
 function goalPlan(goal, ym) { let best = null; for (const k in goal.plan) if (k <= ym && (best === null || k > best)) best = k; return best ? +goal.plan[best] || 0 : 0; }
 function goalBal(goal) { let b = 0; for (const x of S.flows) if (x.goalId === goal.id) b += x.kind === 'save' ? x.amount : -x.amount; return b; }
-function autoGoals() { // les versements automatiques de chaque mois, jusqu'au mois en cours
-  const now = ymOf(today()); let n = 0;
-  for (const goal of S.goals) for (let ym = goal.start; ym <= now; ym = addMonths(ym, 1)) {
-    if (S.flows.some(x => x.goalId === goal.id && x.auto === ym)) continue;
-    const want = Math.min(goalPlan(goal, ym), Math.max(0, goal.target - goalBal(goal))); if (!want) continue;
-    S.flows.push({id: uid(), kind: 'save', goalId: goal.id, amount: want, date: `${ym}-01` < (goal.created || '') ? goal.created : `${ym}-01`, auto: ym, note: 'Versement automatique'}); n++;
+// Ce qui a été versé dans l'objectif (versements − retraits) : les dépenses payées par l'objectif n'effacent pas l'effort
+function goalSaved(goal) { let b = 0; for (const x of S.flows) if (x.goalId === goal.id) b += x.kind === 'save' ? x.amount : x.kind === 'withdraw' ? -x.amount : 0; return b; }
+const STAGE_NAMES = ['', 'les fondations', 'les murs', 'le toit', 'la touche finale'];
+function goalMilestones() { // un palier franchi (25, 50, 75, 100 %) : le monument grandit, la cité fait la fête
+  let hit = null;
+  for (const x of S.goals) { const st = goalStage(x); if (st > (x.best || 0)) { x.best = st; hit = {x, st}; } }
+  if (!hit) return false;
+  const {x, st} = hit, pct = st * 25;
+  if (st === 4 && !S.world.skins.includes('tresor')) { S.world.skins.push('tresor'); setTimeout(() => toast('Nouvelle tenue', `${SKINS.tresor.name} (⚙ › Tenues)`), 2400); }
+  SCENE.fest = {until: performance.now() + (st === 4 ? 16000 : 11000), big: st >= 3}; UI.cheerUntil = performance.now() + 4000; fanfare();
+  UI.dlg = {who: 'MERLAIN', face: robotFace('mage_du_code', TEAM.mage_du_code.outfit, 40), text: st === 4 ? `Objectif ${x.name} atteint ! ${fmt(x.target)} de côté. Regarde la vallée : le monument est achevé, la cité fait la fête !` : `Objectif ${x.name} : ${pct} % ! Dans la vallée, ${STAGE_NAMES[st]} sortent de terre. +100 XP.`};
+  toast(`Objectif ${x.name} : ${pct} %`, st === 4 ? 'Objectif atteint ! +100 XP et une nouvelle tenue.' : `+100 XP · le monument gagne ${STAGE_NAMES[st]}.`);
+  return true;
+}
+const goalDoneIn = (goal, ym) => S.flows.reduce((a, x) => a + (x.goalId === goal.id && x.auto === ym ? x.amount : 0), 0);
+// Ce que la trésorerie peut donner sans passer sous zéro, en gardant de quoi finir le budget du mois
+function goalRoom() { const g = computeGame(); if (g.cash == null) return Infinity; const ms = g.ms; return Math.max(0, g.cash - Math.max(0, ms.budget - ms.spent)); }
+function autoGoals() { // les versements automatiques : ce que la trésorerie permet, complétés dès qu'un encaissement arrive
+  if (!S.goals.length) return 0;
+  const now = ymOf(today()); let n = 0, room = goalRoom();
+  for (const goal of S.goals) for (let ym = goal.start; ym <= now && room > 0; ym = addMonths(ym, 1)) {
+    const due = Math.min(goalPlan(goal, ym), Math.max(0, goal.target - goalSaved(goal) + goalDoneIn(goal, ym))), give = Math.min(due - goalDoneIn(goal, ym), room);
+    if (give <= 0) continue;
+    S.flows.push({id: uid(), kind: 'save', goalId: goal.id, amount: give, date: today() < (goal.created || '') ? goal.created : today(), auto: ym, note: 'Versement automatique'}); room -= give; n++;
   }
   return n;
 }
 // Ce que les objectifs prélèveront dans les mois à venir (pour les prévisions)
 function goalOutflows(months) {
   const bal = Object.fromEntries(S.goals.map(x => [x.id, goalBal(x)])), now = ymOf(today());
-  return months.map(ym => { if (ym <= now) return 0; let out = 0; for (const x of S.goals) { if (ym < x.start) continue; const v = Math.min(goalPlan(x, ym), Math.max(0, x.target - bal[x.id])); bal[x.id] += v; out += v; } return out; });
+  for (const x of S.goals) bal[x.id] = goalSaved(x);
+  return months.map(ym => { if (ym < now) return 0; let out = 0; for (const x of S.goals) { if (ym < x.start) continue; const left = ym === now ? Math.max(0, goalPlan(x, ym) - goalDoneIn(x, ym)) : goalPlan(x, ym), v = Math.min(left, Math.max(0, x.target - bal[x.id])); bal[x.id] += v; out += v; } return out; }); // le mois en cours : ce qu'il reste à verser
 }
 function getBudget(ym, cat) {
   let best = null;
@@ -1004,7 +1028,8 @@ function getBudget(ym, cat) {
 const totalBudget = ym => S.categories.reduce((a, c) => a + getBudget(ym, c), 0);
 
 // Le revenu mensuel prévu : celui que tu as indiqué, sinon la moyenne des rentrées des trois derniers mois
-function expectedIncome() {
+function expectedIncome(ym) { // le revenu prévu d'un mois : le dernier changement daté, sinon le revenu de base, sinon la moyenne des rentrées
+  if (ym) { let best = null; for (const k in S.incomePlan) if (k <= ym && (best === null || k > best)) best = k; if (best) return +S.incomePlan[best] || 0; }
   if (S.expectedIncome != null) return S.expectedIncome;
   const ym0 = ymOf(today()), months = [1, 2, 3].map(k => addMonths(ym0, -k));
   const tot = S.incomes.filter(e => e.cat !== 'cadeau' && !e.wishId && months.includes(ymOf(e.date))).reduce((a, e) => a + e.amount, 0);
@@ -1012,16 +1037,17 @@ function expectedIncome() {
 }
 // La trésorerie mois par mois sur un an : + revenu prévu, − budgets (ou les envies, si elles dépassent leur budget)
 function forecast(g) {
-  const ym0 = ymOf(today()), inc = expectedIncome(), rows = []; let bal = g.netCash == null ? 0 : g.netCash;
-  const gOut = goalOutflows(Array.from({length: 12}, (_, k) => addMonths(ym0, k)));
+  const ym0 = ymOf(today()), rows = []; let bal = g.netCash == null ? 0 : g.netCash;
+  const gOut = goalOutflows(Array.from({length: 12}, (_, k) => addMonths(ym0, k))); let sav = S.goals.reduce((a, x) => a + goalBal(x), 0);
   for (let k = 0; k < 12; k++) {
-    const ym = addMonths(ym0, k), ms = monthStats(ym); let out = gOut[k];
+    const ym = addMonths(ym0, k), ms = monthStats(ym), inc = expectedIncome(ym); let out = gOut[k];
     for (const c of ms.cats) out += k === 0 ? Math.max(c.budget - c.spent, c.reserved, 0) : Math.max(c.budget, c.reserved);
     const got = k === 0 ? S.incomes.filter(e => ymOf(e.date) === ym && !e.wishId && e.cat !== 'cadeau').reduce((a, e) => a + e.amount, 0) : 0, mw = S.wishes.filter(w => !w.bought && w.month === ym);
     const income = (k === 0 ? Math.max(0, inc - got) : inc) + mw.filter(w => w.catId === WISH_IN).reduce((a, w) => a + w.price, 0);
     out += mw.filter(w => w.catId === WISH_OUT).reduce((a, w) => a + w.price, 0); // les décaissements hors budget de la Wish list
     bal += income - out;
-    rows.push({ym, income, out, saved: gOut[k], bal, wishes: S.wishes.filter(w => !w.bought && w.month === ym), over: ms.cats.filter(c => c.reserved > c.budget)});
+    sav += gOut[k] - mw.filter(w => wishGoal(w)).reduce((a, w) => a + w.price, 0); // l'épargne des objectifs : + versements − ce qu'ils paient
+    rows.push({ym, income, out, saved: gOut[k], sav, bal, wishes: S.wishes.filter(w => !w.bought && w.month === ym), over: ms.cats.filter(c => c.reserved > c.budget)});
   }
   return rows;
 }
@@ -1150,7 +1176,9 @@ function computeGame() {
   const W_ = S.world;
   let nChests = 0;
   for (const id in W_.chests) { const ch = CHESTS.find(x => x.id === id); if (ch) { xp += ch.xp; nChests++; } }
-  if (Array.isArray(W_.found)) xp += 10 * W_.found.length; // lieux découverts dans l'ancienne carte : l'XP est conservée
+  if (Array.isArray(W_.found)) xp += 10 * W_.found.length;
+  // l'épargne : 1 XP par tranche de 10 000 F versée dans un objectif, +100 XP par palier de 25 % franchi
+  for (const x of S.goals) xp += Math.floor(Math.max(0, goalSaved(x)) / 10000) + 100 * (x.best || 0); // lieux découverts dans l'ancienne carte : l'XP est conservée
 
   let level = 1, base = 0; while (xp >= base + xpNeed(level)) { base += xpNeed(level); level++; }
 
@@ -1498,9 +1526,41 @@ function valleyLayer(n, chantier, tod) {
   for (const it of built.filter(it => it.kind === 'lake' || it.kind === 'pave' || it.kind === 'square' || it.kind === 'garden')) D(it);
   for (const it of built.filter(it => !['lake', 'pave', 'square', 'garden'].includes(it.kind))) D(it);
   if (chantier && plan[n]) scaffold(g, plan[n]);
+  goalMonuments(g, pal, VW);
   if (tod === 'night') { g.save(); g.globalCompositeOperation = 'source-atop'; g.fillStyle = 'rgba(10,10,40,.5)'; g.fillRect(0, 0, W, SH); g.restore(); }
   if (tod !== 'day') for (const [x, y, w, h] of VW) R(g, x, y, w, h, '#f0b070');
   return c;
+}
+// Chaque objectif bâtit son monument dans la vallée, un quart à la fois (25, 50, 75, 100 %)
+const goalKind = x => /urgen|secour|impr/i.test(x.name) ? 'granary' : /loge|maison|appart/i.test(x.name) ? 'house' : /mariag|noce/i.test(x.name) ? 'chapel' : 'statue';
+const goalStage = x => x.target ? Math.min(4, Math.floor(goalSaved(x) / x.target * 4 + 1e-9)) : 0;
+const GOAL_SPOTS = {granary: [VALLEY.cx + 250, .8], house: [VALLEY.cx - 255, .9], chapel: [VALLEY.cx + 150, .93]};
+function goalMonuments(g, pal, VW) {
+  let k = 0;
+  for (const x of S.goals) { const st = Math.max(goalStage(x), x.best || 0); if (!st) continue; const kind = goalKind(x), [gx, gp] = GOAL_SPOTS[kind] || [VALLEY.cx - 60 + (k++) * 70, .97]; drawMonument(g, kind, gx, gp, st, pal, VW); }
+}
+function drawMonument(g, kind, x, p, st, pal, VW) {
+  const s = vs(p), y = vy(p), S1 = v => Math.max(1, Math.round(v * s)), L = (dx, dy, w, h, c) => R(g, x + Math.round(dx * s), y - Math.round(dy * s), S1(w), S1(h), c);
+  const lit = (dx, dy, w, h) => { L(dx, dy, w, h, '#f0b070'); VW.push([x + Math.round(dx * s), y - Math.round(dy * s), S1(w), S1(h)]); };
+  g.fillStyle = 'rgba(30,20,30,.25)'; g.beginPath(); g.ellipse(x, y, 16 * s, 3 * s, 0, 0, 7); g.fill();
+  if (kind === 'house') { // ta maison
+    L(-14, 1, 28, 2, '#a89888'); for (let i = -14; i <= 14; i += 4) L(i, 4, 1, 4, '#8a6040'); L(-14, 3, 29, 1, '#a87850');
+    if (st >= 2) { L(-10, 16, 20, 15, '#e8c8a0'); L(9, 16, 1, 15, '#c8a080'); L(-2, 8, 4, 7, '#6a4030'); }
+    if (st >= 3) { for (let i = 0; i < 7; i++) L(-12 + i, 17 + i, 24 - i * 2, 1, i === 6 ? '#d0705a' : '#b0503e'); lit(-8, 13, 3, 3); lit(5, 13, 3, 3); }
+    if (st >= 4) { L(5, 26, 2, 5, '#8a5a4a'); L(-16, 3, 3, 2, '#ff6fa8'); L(13, 3, 3, 2, '#ffd166'); L(-1, 32, 1, 7, '#3a2a2a'); L(0, 32, 5, 3, '#ff8a3d'); }
+  } else if (kind === 'chapel') { // la chapelle du mariage
+    L(-2, 1, 4, 2, '#e8d8c0'); if (st === 1) { L(-6, 12, 1, 12, '#56a040'); L(5, 12, 1, 12, '#56a040'); L(-6, 13, 12, 1, '#56a040'); for (const [dx, dy] of [[-6, 9], [5, 6], [-2, 13], [3, 13], [-6, 4]]) L(dx, dy, 1, 1, '#ff6fa8'); }
+    if (st >= 2) { L(-9, 14, 18, 13, '#f4efe6'); L(8, 14, 1, 13, '#d8d0c4'); for (let i = 0; i < 4; i++) L(-2 + Math.round(i * .5), 7 - i, 4 - i, 1, '#6a4a3a'); L(-2, 7, 4, 6, '#6a4a3a'); }
+    if (st >= 3) { for (let i = 0; i < 6; i++) L(-11 + i, 15 + i, 22 - i * 2, 1, i === 5 ? '#8a90b0' : '#6a7090'); L(-3, 28, 6, 8, '#f4efe6'); for (let i = 0; i < 5; i++) L(-3 + Math.round(i * .6), 29 + i, 6 - i, 1, '#6a7090'); lit(-6, 11, 2, 4); lit(4, 11, 2, 4); }
+    if (st >= 4) { L(-1, 26, 2, 2, '#ffd166'); L(-1, 38, 1, 4, '#ffd166'); L(-2, 37, 3, 1, '#ffd166'); for (let i = -14; i < 14; i += 3) L(i, 2, 2, 2, ['#ff6fa8', '#f4f4f4', '#ffd166'][((i + 14) / 3) % 3 | 0]); L(-14, 6, 2, 2, '#e5484d'); L(12, 6, 2, 2, '#e5484d'); }
+  } else if (kind === 'granary') { // le grenier fortifié de l'urgence
+    L(-9, 3, 18, 3, '#9a8a7a'); for (let i = -9; i < 9; i += 3) L(i, 3, 1, 3, '#7a6a5a');
+    if (st >= 2) { L(-7, 18, 14, 15, '#b8a898'); for (let r = 0; r < 15; r += 3) L(-7, 18 - r, 14, 1, '#9a8a7a'); L(-2, 9, 4, 6, '#5a3a2a'); }
+    if (st >= 3) { for (let i = 0; i < 8; i++) L(-9 + i, 19 + i, 18 - i * 2, 1, i % 2 ? '#8a4a3a' : '#a85a48'); lit(-1, 14, 2, 2); }
+    if (st >= 4) { for (let i = -7; i < 7; i += 3) L(i, 21, 2, 2, '#b8a898'); L(0, 34, 1, 8, '#3a2a2a'); L(1, 34, 5, 3, '#86cf7c'); lit(-2, 9, 4, 6); }
+  } else { // une statue pour les autres objectifs
+    L(-4, 4, 8, 4, '#a89888'); if (st >= 2) L(-2, 12, 4, 8, '#c8b8a8'); if (st >= 3) L(-2, 15, 4, 3, '#d8c8b8'); if (st >= 4) { L(-2, 15, 4, 11, '#ffd166'); L(-1, 17, 2, 2, '#fff1b0'); }
+  }
 }
 function scaffold(g, it) { // un échafaudage de bois, là où la ville grandira demain si la journée reste sous le budget
   const s = vs(it.p), y = vy(it.p), big = ['church', 'hall', 'tower', 'dome', 'castle', 'palace', 'walls', 'mill'].includes(it.kind);
@@ -1697,7 +1757,7 @@ function glowLayer(lights, tod) {
 
 /* ---- La scène vivante ---- */
 const SCENE = {cam: 300, camV: 0, target: null, focus: null, layers: null, key: '', walkers: [], t0: performance.now(), drag: null, rain: []};
-function sceneKey(g) { return timeOfDay() + '|' + weatherOf(g) + '|' + (g ? g.buildDays : 0) + '|' + (g && g.buildToday ? 1 : 0) + '|' + heroChar(); }
+function sceneKey(g) { return timeOfDay() + '|' + weatherOf(g) + '|' + (g ? g.buildDays : 0) + '|' + (g && g.buildToday ? 1 : 0) + '|' + heroChar() + '|' + S.goals.map(x => goalKind(x) + Math.max(goalStage(x), x.best || 0)).join(','); }
 // Si le héros choisi tient d'habitude un lieu, Roré prend sa place
 const keeperOf = id => { const k = PLACES[id] && PLACES[id].keeper; return k && k === heroChar() ? 'rore' : k; };
 function ensureLayers(g) {
@@ -1786,7 +1846,8 @@ function drawScene(now) {
   // l'équipe devant ses lieux, et les promeneurs
   const actors = [];
   for (const [id, p] of Object.entries(PLACES)) if (p.keeper) { const k = keeperOf(id); actors.push({key: k, outfit: CHARS[k].outfit, idle: CHARS[k].idle, x: id === 'board' ? p.x + 30 : id === 'belvedere' ? p.x + 22 : p.x + p.w - 10, pose: SCENE.focus === id && now - (UI.focusAt || 0) < 2200 ? 'wave' : 'stand', i: p.x}); }
-  for (const w of SCENE.walkers) { const cheer = w.key === 'hero' && now < (UI.cheerUntil || 0); actors.push({key: w.key, outfit: w.key === 'hero' ? heroOutfit() : w.outfit, idle: w.idle, x: w.x, pose: cheer ? 'cheer' : w.tx != null ? 'walk' : 'stand', dir: cheer ? 'down' : w.dir, frame: cheer ? Math.floor(t * 6) % 2 : w.tx != null ? Math.floor(w.step * 7) % 4 : 0, eyes: cheer ? 'happy' : null, i: w.i, hero: w.key === 'hero'}); }
+  const fest = SCENE.fest && now < SCENE.fest.until;
+  for (const w of SCENE.walkers) { const cheer = (w.key === 'hero' && now < (UI.cheerUntil || 0)) || (fest && w.tx == null); actors.push({key: w.key, outfit: w.key === 'hero' ? heroOutfit() : w.outfit, idle: w.idle, x: w.x, pose: cheer ? 'cheer' : w.tx != null ? 'walk' : 'stand', dir: cheer ? 'down' : w.dir, frame: cheer ? Math.floor(t * 6) % 2 : w.tx != null ? Math.floor(w.step * 7) % 4 : 0, eyes: cheer ? 'happy' : null, i: w.i, hero: w.key === 'hero'}); }
   for (const a of actors) {
     const sx = Math.round((a.x - cam) * z); if (sx < -40 * z || sx > cv.width + 40 * z) continue;
     const ie = a.pose === 'stand' ? idleEffect(a.idle, t + a.i * .37) : {};
@@ -1801,6 +1862,17 @@ function drawScene(now) {
   g.save(); g.globalCompositeOperation = 'lighter'; g.drawImage(L.glow, -Math.round(cam * z), 0, FW * z, SH * z); g.restore();
   if (amb) ambAir(g, L, z, cam, t, hour);
   // météo : pluie, éclairs
+  // la fête d'un palier d'objectif : feu d'artifice au-dessus de la vallée, banderoles dans la rue
+  if (SCENE.fest && now < SCENE.fest.until) {
+    const left = (SCENE.fest.until - now) / 1000, Wv = cv.width / z;
+    g.save(); g.globalCompositeOperation = 'lighter';
+    for (let b = 0; b < (SCENE.fest.big ? 3 : 2); b++) { const per = .9 + b * .35, n = Math.floor(t / per), age = t / per - n, cx0 = 30 + hash(n * 3 + b) * (Wv - 60), cy0 = 14 + hash(n * 5 + b) * 34, col = ['255,120,140', '255,214,102', '140,220,255', '160,255,170', '220,160,255'][(n + b) % 5];
+      if (age < .18) { g.fillStyle = `rgba(255,240,200,.8)`; g.fillRect(cx0 * z, (cy0 + (1 - age / .18) * 40) * z, z, 3 * z); continue; }
+      const a2 = (age - .18) / .82; for (let i = 0; i < 18; i++) { const ang = i / 18 * Math.PI * 2, r = a2 * 22, px = cx0 + Math.cos(ang) * r, py = cy0 + Math.sin(ang) * r + a2 * a2 * 10; g.fillStyle = `rgba(${col},${(1 - a2) * .95})`; g.fillRect(px * z, py * z, Math.max(1, z * 1.2), Math.max(1, z * 1.2)); } }
+    g.restore();
+    const cols = ['#e5484d', '#ffd166', '#3b5dc9', '#86cf7c', '#ff6fa8'];
+    for (const [a, b] of OPENINGS) for (let x = a; x < b; x += 6) { const sx = (x - cam) * z; if (sx < -10 * z || sx > cv.width + 10 * z) continue; const sag = Math.sin((x - a) / (b - a) * Math.PI) * 6, yy = STREET - 44 + sag; g.fillStyle = 'rgba(40,30,40,.8)'; g.fillRect(sx, yy * z, 6 * z, Math.max(1, z * .5)); g.fillStyle = cols[(x / 6 | 0) % 5]; g.beginPath(); g.moveTo(sx, yy * z); g.lineTo(sx + 4 * z, yy * z); g.lineTo(sx + 2 * z, (yy + 4 + Math.sin(t * 6 + x) * .6) * z); g.fill(); }
+  }
   if (SCENE.rain.length) { g.strokeStyle = 'rgba(200,210,240,.45)'; g.lineWidth = Math.max(1, z * .5); g.beginPath(); for (const p of SCENE.rain) { g.moveTo(p.x * z, p.y * z); g.lineTo((p.x - 1.5) * z, (p.y + 6) * z); } g.stroke(); }
   if (L.weather === 'storm' && (t % 7) < .12) { g.fillStyle = 'rgba(255,255,255,.35)'; g.fillRect(0, 0, cv.width, cv.height); }
   // le lieu choisi : le reste s'assombrit autour de sa silhouette ; le lieu survolé ou choisi s'illumine
@@ -1843,7 +1915,7 @@ const SUBMENUS = {
   archives: [['cal', 'Calendrier'], ['list', 'Liste'], ['back', 'Retour']],
   board:    [['today', 'Du jour'], ['week', 'Semaine'], ['progress', 'Progrès'], ['trophies', 'Trophées'], ['newq', '+ Quête'], ['manage', 'Gérer'], ['back', 'Retour']],
   lab:      [['measures', 'Mesures'], ['newt', '+ Suivi'], ['back', 'Retour']],
-  home:     [['hero', 'Héros'], ['plan', 'Plan'], ['char', 'Personnage'], ['look', 'Apparence'], ['skins', 'Tenues'], ['budgets', 'Budgets'], ['cats', 'Catégories'], ['save', 'Sauvegarde'], ['rules', 'Règles'], ['back', 'Retour']],
+  home:     [['hero', 'Héros'], ['char', 'Personnage'], ['look', 'Apparence'], ['skins', 'Tenues'], ['budgets', 'Budgets'], ['cats', 'Catégories'], ['save', 'Sauvegarde'], ['rules', 'Règles'], ['back', 'Retour']],
   belvedere:[['wishes', 'Wish list'], ['newwish', '+ Add'], ['goals', 'Objectifs'], ['forecast', 'Prévisions'], ['tip', 'Un conseil'], ['back', 'Retour']],
 };
 // L'heure où la session de la porte d'entrée expire (toutes les 15 minutes, le code est redemandé)
@@ -1893,6 +1965,7 @@ const CHESTS = [ // les récompenses : elles s'ouvrent seules quand la condition
   {id: 'troph',  name: 'Sept trophées',         xp: 250, cond: {k: 'trophies', n: 7, txt: '7 trophées'}},
   {id: 'legend', name: 'Niveau 10',             xp: 500, skin: 'legende', cond: {k: 'level', n: 10, txt: 'niveau 10'}},
 ];
+// la tenue du Gardien du trésor se gagne en atteignant un objectif d'épargne
 const condVal = (k, g) => k === 'trophies' ? g.unlocked.length : g[k];
 const condMet = (c, g) => !c.cond || condVal(c.cond.k, g) >= c.cond.n;
 function defaultWorld() { return {seen: '', found: [], chests: {}, skins: ['classique'], skin: 'classique', built: 0, hero: 'rore', look: {...DEFAULT_LOOK}, mapv: 6}; }
@@ -1948,70 +2021,26 @@ function wishRow(w) {
     ${gl ? `<small class="${goalBal(gl) >= w.price ? 'green' : 'dim'}">Objectif ${esc(gl.name)} : ${fmt(goalBal(gl))} de côté sur ${fmt(w.price)}.</small>` : off ? `<small class="dim">Hors budget : compté seulement dans les prévisions.</small>` : over ? `<small class="red">Dépasse le budget ${esc(c.cat.name)} de ${esc(ymLabel(w.month))} (${fmt(c.budget)}) de ${fmt(over)}.</small>` : c ? `<small class="green">Réservé dans le budget ${esc(c.cat.name)} (${fmt(c.budget)}).</small>` : ''}
     <div class="row">${over ? `<button class="ffbtn sm" data-act="fitWish" data-id="${w.id}" title="Monter le budget de ce mois juste assez">Ajuster</button>` : ''}<button class="ffbtn sm" data-act="buyWish" data-id="${w.id}">${inc ? 'Reçu' : off ? 'Payé' : 'Acheté'}</button><button class="x" data-act="delWish" data-id="${w.id}" aria-label="Supprimer">×</button></div></div>`;
 }
-/* ---- Ton plan : salaire net du prêt 850 k ; phase 1 chez les parents (déc. 2026 – juin 2027), phase 2 dans l'appartement
-   (loyer 150 k, dès juillet 2027) ; objectifs Urgence, Logement, Mariage ; voiture et MacBook dans la Wish list. ---- */
-const PLAN = {
-  income: 850000, p1: '2026-12', p2: '2027-07',
-  cats: [ // [id cherché, nom du plan, budget phase 1, budget phase 2]
-    ['alim', 'Alimentation', 70000, 110000], ['transp', 'Carburant & transport', 60000, 60000], ['fact', 'Téléphone & internet', 20000, 20000],
-    ['lois', 'Couple', 120000, 120000], ['fam', 'Famille', 40000, 40000], ['sante', 'Santé & perso', 30000, 30000], ['div', 'Imprévus', 40000, 40000],
-    ['loge', 'Loyer', 0, 150000], ['charges', 'Charges maison', 0, 45000],
-  ],
-  goals: [['urgence', 'Urgence', 1000000, '2028-12', {'2027-01': 150000, '2027-02': 30000, '2027-07': 40000}],
-          ['logement', 'Logement', 2000000, '2027-07', {'2027-02': 400000, '2027-07': 0}],
-          ['mariage', 'Mariage', 3500000, '2028-11', {'2027-02': 40000, '2027-07': 195000}]],
-  wishes: [['Réparation voiture (acompte)', 470000, '@out', '2026-12'], ['Réparation voiture (solde)', 90000, '@out', '2027-01'], ['Écran MacBook', 230000, '@out', '2027-01'],
-           ['Caution, avance et agence', 900000, '@goal:logement', '2027-07'], ["Équipement de l'appartement", 1100000, '@goal:logement', '2027-07'],
-           ['Démarches du mariage (dot, présentation)', 1000000, '@goal:mariage', '2028-03'], ['Cérémonie', 2500000, '@goal:mariage', '2028-11']],
-};
-function planPanel() {
-  const row = ([, n, a, b]) => `<span>${esc(n)}</span><b>${a ? kfmt(a) : '—'} → ${kfmt(b)}</b>`;
-  return `<div class="gold">TON PLAN</div><p class="dim">Salaire net du prêt : ${fmt(PLAN.income)} par mois. Phase 1 dès ${esc(ymLabel(PLAN.p1))} (chez tes parents) → phase 2 dès ${esc(ymLabel(PLAN.p2))} (appartement, loyer 150 k).</p>
-    <div class="gold">BUDGETS PAR MOIS</div><div class="kv">${PLAN.cats.map(row).join('')}<span class="gold">Total</span><b class="gold">${kfmt(PLAN.cats.reduce((a, c) => a + c[2], 0))} → ${kfmt(PLAN.cats.reduce((a, c) => a + c[3], 0))}</b></div>
-    <div class="gold">OBJECTIFS (versés automatiquement)</div><div class="kv">${PLAN.goals.map(([, n, t, due, pl]) => `<span>${esc(n)} : ${kfmt(t)} pour ${esc(ymLabel(due))}</span><b>${Object.entries(pl).map(([m, v]) => `${kfmt(v)} dès ${m.slice(5)}/${m.slice(2, 4)}`).join(', ')}</b>`).join('')}</div>
-    <div class="gold">WISH LIST</div><div class="kv">${PLAN.wishes.map(([n, a, t, m]) => `<span>${esc(n)} <small class="dim">${t === '@out' ? '(trésorerie)' : t === '@goal:logement' ? '(objectif Logement)' : '(objectif Mariage)'}</small></span><b>${kfmt(a)} · ${m.slice(5)}/${m.slice(2, 4)}</b>`).join('')}</div>
-    <p class="dim">Appliquer renomme tes catégories (Transport → Carburant & transport, Factures → Téléphone & internet, Loisirs → Couple, Divers → Imprévus, Santé → Santé & perso, Logement → Loyer), crée Famille et Charges maison, met à 0 le budget des autres dès ${esc(ymLabel(PLAN.p1))}, règle le revenu prévu et crée objectifs et lignes de Wish list (sans doublon si tu l'appliques deux fois). Tes dépenses déjà notées ne bougent pas.</p>
-    <button class="ffbtn full" data-act="applyPlan">Appliquer le plan</button>`;
-}
-function applyPlan() {
-  const cols = Object.keys(COLORS), mons = Object.keys(MONS), b1 = S.budgets[PLAN.p1] = S.budgets[PLAN.p1] || {}, b2 = S.budgets[PLAN.p2] = S.budgets[PLAN.p2] || {}, used = new Set();
-  for (const [id, name, a, b] of PLAN.cats) {
-    let c = catOf(id) || S.categories.find(x => x.name.toLowerCase() === name.toLowerCase());
-    if (!c) { c = {id, name, monster: mons[S.categories.length % mons.length], color: cols[S.categories.length % cols.length], budget: 0}; S.categories.push(c); }
-    c.name = name; b1[c.id] = a; b2[c.id] = b; used.add(c.id);
-  }
-  for (const c of S.categories) if (!used.has(c.id)) { b1[c.id] = 0; b2[c.id] = 0; }
-  S.expectedIncome = PLAN.income;
-  for (const [key, name, target, due, plan] of PLAN.goals) {
-    let x = S.goals.find(y => y.planKey === key);
-    if (!x) { x = {id: uid(), planKey: key, name, start: PLAN.p1, created: today()}; S.goals.push(x); }
-    Object.assign(x, {name, target, due, plan: {...plan}});
-  }
-  for (const [name, price, type, month] of PLAN.wishes) {
-    if (S.wishes.some(w => w.planName === name)) continue;
-    const catId = type.startsWith('@goal:') ? '@goal:' + S.goals.find(y => y.planKey === type.slice(6)).id : type;
-    S.wishes.push({id: uid(), name, price, catId, month, note: '', bought: null, planName: name});
-  }
-  autoGoals(); SFX.quest(); fanfare(); toast('Plan appliqué', 'Catégories, budgets, objectifs et Wish list sont prêts.'); UI.sub = 'plan'; commit();
-}
 function goalETA(goal) { // le mois où l'objectif sera atteint, au rythme des versements prévus
-  let b = goalBal(goal), ym = ymOf(today()); if (b >= goal.target) return 'atteint';
+  let b = goalSaved(goal), ym = ymOf(today()); if (b >= goal.target) return 'atteint';
+  b += Math.max(0, goalPlan(goal, ym) - goalDoneIn(goal, ym));
   for (let k = 1; k <= 120; k++) { ym = addMonths(ym, 1); if (ym < goal.start) continue; b += goalPlan(goal, ym); if (b >= goal.target) return ym; }
   return null;
 }
 function goalCard(x) {
-  const b = goalBal(x), pct = x.target ? Math.min(100, b / x.target * 100) : 0, eta = goalETA(x), now = ymOf(today()), next = goalPlan(x, now > x.start ? addMonths(now, 1) : x.start), late = eta && eta !== 'atteint' && x.due && eta > x.due;
-  return `<div class="li col goal"><div class="row between"><b>◆ ${esc(x.name)}</b><span><b class="gold">${fmt(b)}</b> <small class="dim">/ ${fmt(x.target)}</small></span></div>
+  const b = goalBal(x), sv = goalSaved(x), pct = x.target ? Math.min(100, sv / x.target * 100) : 0, eta = goalETA(x), now = ymOf(today()), due = now >= x.start ? goalPlan(x, now) : 0, done = goalDoneIn(x, now), next = goalPlan(x, now >= x.start ? addMonths(now, 1) : x.start), late = eta && eta !== 'atteint' && x.due && eta > x.due;
+  return `<div class="li col goal"><div class="row between"><b>◆ ${esc(x.name)}</b><span><b class="gold">${fmt(sv)}</b> <small class="dim">/ ${fmt(x.target)}</small></span></div>
     <span class="gbar"><i style="width:${pct.toFixed(1)}%"></i><em>${Math.round(pct)} %</em></span>
-    <small class="dim">${x.due ? `Échéance ${esc(ymLabel(x.due))} · ` : ''}Prochain versement automatique : ${fmt(next)}${eta === 'atteint' ? ' · <span class="green">objectif atteint</span>' : eta ? ` · atteint en ${esc(ymLabel(eta))}` : ' · pas de versement prévu'}</small>
+    ${b !== sv ? `<small class="dim">Disponible dans l'objectif : ${fmt(b)} (le reste a déjà servi)</small>` : ''}${due ? `<small class="${done >= due ? 'green' : 'dim'}">Ce mois-ci : ${fmt(done)} / ${fmt(due)} versés${done < due ? ' · le reste sera versé dès que la trésorerie le permet' : ' ✓'}</small>` : ''}
+    <small class="dim">${x.due ? `Échéance ${esc(ymLabel(x.due))} · ` : ''}Mois prochain : ${fmt(next)}${eta === 'atteint' ? ' · <span class="green">objectif atteint</span>' : eta ? ` · atteint en ${esc(ymLabel(eta))}` : ' · pas de versement prévu'}</small>
     ${late ? `<small class="red">À ce rythme, l'objectif arrive après l'échéance : augmente le versement ou repousse la date.</small>` : ''}
     <div class="row"><button class="ffbtn sm" data-act="goalMove" data-id="${x.id}" data-k="save">Verser</button><button class="ffbtn sm" data-act="goalMove" data-id="${x.id}" data-k="withdraw">Retirer</button><button class="ffbtn sm" data-act="goalEdit" data-id="${x.id}">Modifier</button><button class="x" data-act="goalDel" data-id="${x.id}" aria-label="Supprimer">×</button></div></div>`;
 }
 function goalsPanel(g) {
   const tot = S.goals.reduce((a, x) => a + goalBal(x), 0);
   return `<div class="row between wrap"><span class="gold">OBJECTIFS D'ÉPARGNE</span><b>${fmt(tot)}</b></div>
-    <p class="dim">Chaque début de mois, le versement prévu est mis de côté tout seul : la trésorerie baisse d'autant, l'objectif monte. Le budget du jour ne bouge pas.</p>
-    ${S.goals.length ? `<div class="list">${S.goals.map(goalCard).join('')}</div>` : '<p class="dim">Aucun objectif. Crée-en un ci-dessous, ou applique ton plan (⚙ › Plan).</p>'}
+    <p class="dim">Chaque mois, le versement prévu est pris sur la trésorerie disponible, tout seul : ce qui manque est complété dès qu'un encaissement arrive. La trésorerie garde toujours de quoi finir le budget du mois.</p>
+    ${S.goals.length ? `<div class="list">${S.goals.map(goalCard).join('')}</div>` : '<p class="dim">Aucun objectif. Crée-en un ci-dessous.</p>'}
     <button class="ffbtn full" data-act="goalEdit">+ Nouvel objectif</button>`;
 }
 function goalForm(x) {
@@ -2044,20 +2073,26 @@ function wishForm(w) {
 // Les prévisions : trois chiffres, une petite courbe, et le détail mois par mois si on le veut
 const monthShort = ym => { const n = ymLabel(ym).split(' ')[0]; return (n.length > 4 ? n.slice(0, 4) + '.' : n) + ' ' + ym.slice(2, 4); };
 function forecastPanel(g) { // les prévisions : trois chiffres et une barre par mois (la trésorerie prévue en fin de mois)
-  const f = forecast(g), inc = expectedIncome(), start = g.netCash == null ? 0 : g.netCash, low = f.reduce((a, r) => r.bal < a.bal ? r : a, f[0]), end = f[f.length - 1];
+  const f = forecast(g), inc = expectedIncome(ymOf(today())), start = g.netCash == null ? 0 : g.netCash, low = f.reduce((a, r) => r.bal < a.bal ? r : a, f[0]), end = f[f.length - 1];
   const lo = Math.min(0, ...f.map(r => r.bal)), hi = Math.max(1, ...f.map(r => r.bal)), span = hi - lo, zero = hi / span * 100;
   const ini = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
   const bars = f.map((r, k) => { const h = Math.max(1.5, Math.abs(r.bal) / span * 100), neg = r.bal < 0;
     return `<button class="fbar ${neg ? 'neg' : ''}" data-k="${k}" aria-label="${esc(ymLabel(r.ym))} : ${fmt(r.bal)}"><i style="${neg ? `top:${zero}%` : `bottom:${100 - zero}%`};height:${h.toFixed(1)}%"></i>${r.wishes.length ? `<em style="${neg ? `top:${zero}%;margin-top:-10px` : `bottom:${(100 - zero + h).toFixed(1)}%`}"></em>` : ''}<span>${ini[+r.ym.slice(5) - 1]}</span></button>`; }).join('');
   const tile = (label, v, cls = '', sub = '') => `<div><small>${label}</small><b class="${cls}">${fmt(v)}</b>${sub ? `<small>${sub}</small>` : ''}</div>`;
-  return `<div class="gold">PRÉVISIONS · 12 MOIS</div>
-    <p class="dim">Ta trésorerie à la fin de chaque mois, si tu dépenses tous tes budgets et reçois ${fmt(inc)} par mois.</p>
-    <div class="fstats">${tile('Aujourd\'hui', start)}${tile('Au plus bas', low.bal, low.bal < 0 ? 'red' : '', monthShort(low.ym))}${tile('Dans 12 mois', end.bal, end.bal < 0 ? 'red' : '')}</div>
+  const changes = Object.entries(S.incomePlan).sort((a, b) => a[0].localeCompare(b[0]));
+  const incForm = `<form data-form="income-plan" class="incplan" autocomplete="off"><label class="dim">Revenu mensuel prévu${S.expectedIncome == null && !changes.length && inc ? ' (estimé d\'après tes rentrées récentes)' : ''}</label>
+    <div class="row"><input name="amount" class="amount" inputmode="numeric" value="${num(inc)}" aria-label="Revenu mensuel prévu"><span class="gold">F</span></div>
+    <div class="row"><span class="dim">à partir de</span><input type="month" name="from" class="grow" value="${ymOf(today())}" min="${ymOf(today())}"><button class="ffbtn sm">Valider</button></div>
+    ${changes.length ? `<div class="kv">${changes.map(([m, a]) => `<span>Dès ${esc(ymLabel(m))}</span><b>${fmt(a)} <button type="button" class="x" data-act="delIncPlan" data-m="${m}" aria-label="Retirer">×</button></b>`).join('')}</div>` : ''}</form>`;
+  return `<div class="gold">PRÉVISIONS · 12 MOIS</div>${incForm}
+    <p class="dim">Ta trésorerie disponible à la fin de chaque mois (hors épargne), si tu dépenses tous tes budgets et reçois le revenu prévu.</p>
+    <div class="fstats">${tile('Aujourd\'hui', start)}${tile('Au plus bas', low.bal, low.bal < 0 ? 'red' : '', monthShort(low.ym))}${tile('Dans 12 mois', end.bal, end.bal < 0 ? 'red' : '', 'trésorerie dispo')}</div>
+    ${S.goals.length ? `<div class="fstats two">${tile('Épargne dans 12 mois', end.sav, '', 'dans tes objectifs')}${tile('Total dans 12 mois', end.bal + end.sav, end.bal + end.sav < 0 ? 'red' : 'gold', 'trésorerie + épargne')}</div>` : ''}
     <div class="fbars" style="--zero:${zero.toFixed(1)}%">${bars}</div>
     <p class="ftip" id="ftip">Touche une barre pour voir le mois. <span class="fkey"><em></em> une ligne de la Wish list tombe ce mois-là</span></p>
     ${low.bal < 0 ? `<p class="red">Tu passerais sous zéro en ${esc(ymLabel(low.ym))}. Repousse une ligne de la Wish list, ajuste un budget ou prévois une rentrée.</p>` : ''}
     ${g.netCash == null ? '<p class="red">Ta trésorerie de départ n\'est pas définie : les barres partent de 0.</p>' : ''}
-    <form data-form="income-plan"><label class="dim">Revenu mensuel prévu${S.expectedIncome == null && inc ? ' (moyenne de tes rentrées récentes)' : ''}</label><div class="row"><input name="amount" class="amount" inputmode="numeric" value="${S.expectedIncome == null ? '' : num(S.expectedIncome)}" placeholder="${num(inc)}"><span class="gold">F</span><button class="ffbtn sm">OK</button></div></form>
+
     <details class="fdetail"><summary>Mois par mois</summary><div class="kv fc">${f.map(r => `<span>${esc(ymLabel(r.ym))}${r.wishes.length ? ` · ${r.wishes.map(w => esc(w.name)).join(', ')}` : ''}</span><b class="${r.bal < 0 ? 'red' : ''}">${fmt(r.bal)}</b>`).join('')}</div><p class="dim">Chaque mois : + revenu prévu + encaissements de la Wish list − budgets du mois − décaissements hors budget (une ligne plus chère que son budget pèse en plus). Départ : la trésorerie nette.</p></details>`;
 }
 // Toucher ou survoler une barre : le mois, la trésorerie prévue et les envies s'affichent dessous
@@ -2065,7 +2100,7 @@ function forecastPoint(e) {
   const b = e.target.closest && e.target.closest('.fbar'); if (!b || UI.place !== 'belvedere' || UI.sub !== 'forecast') return;
   const r = forecast(UI.game)[+b.dataset.k]; if (!r) return;
   document.querySelectorAll('.fbar.on').forEach(x => x.classList.remove('on')); b.classList.add('on');
-  $('#ftip').innerHTML = `<b>Fin ${esc(ymLabel(r.ym))}</b> · <span class="${r.bal < 0 ? 'red' : 'gold'}">${fmt(r.bal)}</span><br><small>+ ${fmt(r.income)} revenu · − ${fmt(r.out)} budgets${r.wishes.length ? ` · ${r.wishes.map(w => esc(w.name)).join(', ')}` : ''}</small>`;
+  $('#ftip').innerHTML = `<b>Fin ${esc(ymLabel(r.ym))}</b> · <span class="${r.bal < 0 ? 'red' : 'gold'}">${fmt(r.bal)}</span>${S.goals.length ? ` · épargne ${fmt(r.sav)}` : ''}<br><small>+ ${fmt(r.income)} revenu · − ${fmt(r.out)} budgets${r.wishes.length ? ` · ${r.wishes.map(w => esc(w.name)).join(', ')}` : ''}</small>`;
 }
 document.addEventListener('pointerover', forecastPoint);
 document.addEventListener('pointerdown', forecastPoint);
@@ -2212,7 +2247,6 @@ function homePanel(s, g) {
   if (s === 'budgets') { const ym = UI.viewYM; return `${monthBar(ym)}<p class="dim">Change les montants, puis <b>Valider</b>. Ils comptent pour ce mois et les suivants.</p><form data-form="budgets" autocomplete="off"><div class="list">${S.categories.map(c => `<div class="li budrow">${monImg(c, 16)}<span class="grow">${esc(c.name)}</span><input class="money" inputmode="numeric" name="b_${c.id}" value="${num(getBudget(ym, c))}" data-bud="${getBudget(ym, c)}" aria-label="Budget ${esc(c.name)}"></div>`).join('')}</div><div class="row between"><span>Total</span><b class="gold" id="budTotal">${fmt(totalBudget(ym))}</b></div><button class="ffbtn full" id="budOk">Valider</button></form>`; }
   if (s === 'cats') return `<div class="list">${S.categories.map(c => `<div class="li">${monImg(c, 16)}<input class="grow" value="${esc(c.name)}" maxlength="24" data-chg="catName" data-id="${c.id}"><button class="x" data-act="delCat" data-id="${c.id}">×</button></div>`).join('')}</div><form data-form="cat" class="row"><input name="name" class="grow" placeholder="Nouvelle catégorie" required maxlength="24"><input name="budget" inputmode="numeric" placeholder="Budget" style="width:6em"><button class="ffbtn sm">+</button></form>`;
   if (s === 'look') return lookPanel(g);
-  if (s === 'plan') return planPanel();
   if (s === 'char') return charPanel();
   if (s === 'cash') return cashPanel(g);
   if (s === 'skins') return `<div class="list">${Object.entries(SKINS).map(([k, sk]) => { const on = S.world.skins.includes(k), src = CHESTS.find(c => c.skin === k); return `<button class="li ${on ? '' : 'off'} ${S.world.skin === k ? 'sel' : ''}" ${on ? `data-act="skin" data-id="${k}"` : 'disabled'}>${robotImg('hero|' + heroChar() + '|' + k + '|' + JSON.stringify(heroLook()), heroOutfitFor(k, heroLook(), heroChar()), 32, on ? {} : {grey: true})}<span class="grow">${on ? esc(sk.name) : '???'}<br><small class="dim">${on ? (S.world.skin === k ? 'Portée' : 'Toucher pour porter') : esc(src && src.cond ? 'À débloquer : ' + src.cond.txt : '')}</small></span></button>`; }).join('')}</div>`;
@@ -2267,7 +2301,7 @@ function chooseMenu(i) {
 function toast(title, msg) { const box = $('#toasts'); while (box.children.length >= 3) box.firstChild.remove(); const el = document.createElement('div'); el.className = 'ff toast'; el.innerHTML = `<b class="gold">${esc(title)}</b><br>${esc(msg)}`; $('#toasts').appendChild(el); setTimeout(() => el.remove(), 3600); }
 function commit(fx) {
   const before = UI.game || computeGame();
-  save(true); if (UI.place === 'belvedere' && UI.dlg && UI.sub !== 'tip') { UI.game = computeGame(); UI.dlg.text = lineOf('belvedere', UI.game); } const g = renderUI();
+  autoGoals(); goalMilestones(); save(true); if (UI.place === 'belvedere' && UI.dlg && UI.sub !== 'tip') { UI.game = computeGame(); UI.dlg.text = lineOf('belvedere', UI.game); } const g = renderUI();
   if (g.xp > before.xp) { toast('+' + (g.xp - before.xp) + ' XP', fx || 'Bien joué !'); UI.cheerUntil = performance.now() + 1800; }
   progress(g);
 }
@@ -2350,10 +2384,10 @@ const ACT = {
   delIncome: a => { const e = S.incomes.find(x => x.id === a.dataset.id); if (e && confirm(`Supprimer la rentrée de ${fmt(e.amount)} ?`)) { S.incomes = S.incomes.filter(x => x !== e); commit(); } },
   goCash: () => openPlace('bank', 'cash'),
   goConfig: () => { if (UI.place === 'home') closePlace(); else openPlace('home'); },
-  applyPlan: () => { if (confirm('Appliquer le plan ? Tes catégories seront renommées et tes budgets remplis dès décembre 2026 et juillet 2027. Tes dépenses déjà notées ne bougent pas.')) applyPlan(); },
   goalEdit: a => modal(goalForm(a.dataset.id && goalOf(a.dataset.id))),
   goalDel: a => { const x = goalOf(a.dataset.id); if (!x || !confirm(`Supprimer l'objectif « ${x.name} » ? Ce qui est de côté (${fmt(goalBal(x))}) revient dans l'épargne libre.`)) return; S.flows.forEach(f => { if (f.goalId === x.id) delete f.goalId; }); S.goals = S.goals.filter(y => y !== x); commit(); },
-  goalMove: a => { const x = goalOf(a.dataset.id); if (!x) return; const save = a.dataset.k === 'save'; modal(`<div class="gold">${save ? 'VERSER DANS' : 'RETIRER DE'} ${esc(x.name.toUpperCase())}</div><p class="dim">${save ? 'La trésorerie baisse, l\'objectif monte.' : 'L\'objectif baisse, la trésorerie remonte.'} De côté : ${fmt(goalBal(x))}.</p><form data-form="goalMove" data-id="${x.id}" data-k="${a.dataset.k}" autocomplete="off"><div class="row"><input name="amount" class="amount" inputmode="numeric" placeholder="0"><span class="gold">F</span></div><input name="date" type="date" class="full" value="${today()}"><div class="row"><button class="ffbtn grow">OK</button><button type="button" class="ffbtn" data-act="closeModal">Annuler</button></div></form>`); },
+  goalMove: a => { const x = goalOf(a.dataset.id); if (!x) return; const save = a.dataset.k === 'save'; modal(`<div class="gold">${save ? 'VERSER DANS' : 'RETIRER DE'} ${esc(x.name.toUpperCase())}</div><p class="dim">${save ? 'La trésorerie baisse, l\'objectif monte.' : 'L\'objectif baisse, la trésorerie remonte.'} De côté : ${fmt(goalBal(x))}.${save && goalRoom() !== Infinity ? ` Tu peux verser jusqu'à ${fmt(goalRoom())}.` : ''}</p><form data-form="goalMove" data-id="${x.id}" data-k="${a.dataset.k}" autocomplete="off"><div class="row"><input name="amount" class="amount" inputmode="numeric" placeholder="0"><span class="gold">F</span></div><input name="date" type="date" class="full" value="${today()}"><div class="row"><button class="ffbtn grow">OK</button><button type="button" class="ffbtn" data-act="closeModal">Annuler</button></div></form>`); },
+  delIncPlan: a => { delete S.incomePlan[a.dataset.m]; SFX.click(); commit(); },
   goWish: () => { if (UI.place === 'belvedere') closePlace(); else openPlace('belvedere', 'wishes'); },
   editWish: a => { const w = S.wishes.find(x => x.id === a.dataset.id); if (w) modal(wishForm(w)); },
   delWish: a => { const w = S.wishes.find(x => x.id === a.dataset.id); if (w && confirm(`Retirer « ${w.name} » de la Wish list ?`)) { S.wishes = S.wishes.filter(x => x !== w); commit(); } },
@@ -2430,6 +2464,7 @@ document.addEventListener('submit', e => {
   else if (k === 'goalMove') {
     const x = goalOf(f.dataset.id), amount = parseAmt(v('amount')); if (!x || !amount) return; const save = f.dataset.k === 'save';
     if (!save && amount > goalBal(x)) { toast('Montant', `Il n'y a que ${fmt(goalBal(x))} dans cet objectif.`); return; }
+    if (save) { const room = goalRoom(); if (amount > room) { toast('Trésorerie', room === Infinity ? '' : `Tu peux verser au plus ${fmt(room)} (en gardant de quoi finir le budget du mois).`); return; } }
     S.flows.push({id: uid(), kind: save ? 'save' : 'withdraw', goalId: x.id, amount, date: v('date') || today(), note: ''}); closeModal(); SFX.coin(); commit();
   }
   else if (k === 'wish') {
@@ -2449,7 +2484,7 @@ document.addEventListener('submit', e => {
     S.expenses.push({id, date, amount, catId: catOf(w.catId) ? w.catId : S.categories[0].id, note: '🎁 ' + w.name, ts: Date.now(), wishId: w.id}); delete S.checkins[date];
     w.bought = {date, amount, expId: id}; closeModal(); fanfare(); toast('Réalisé !', `${w.name} : ${fmt(amount)} noté en dépense.`); commit();
   }
-  else if (k === 'income-plan') { const c = v('amount'); S.expectedIncome = c.trim() ? parseAmt(c) : null; SFX.coin(); commit(); }
+  else if (k === 'income-plan') { const a = parseAmt(v('amount')), from = /^\d{4}-\d{2}$/.test(v('from')) ? v('from') : ymOf(today()); if (from <= ymOf(today())) { S.expectedIncome = a; for (const m in S.incomePlan) if (m <= from) delete S.incomePlan[m]; } else S.incomePlan[from] = a; SFX.coin(); toast('Revenu prévu', `${fmt(a)} par mois à partir de ${ymLabel(from)}.`); commit(); }
   else if (k === 'refund') {
     const amount = parseAmt(v('amount')), who = v('who').trim().slice(0, 40), kind = v('kind') || 'owed'; UI.flowKind = kind;
     if (FLOW_KINDS[kind]) { // don, épargne
@@ -2564,7 +2599,7 @@ function handCursor() { // la main gantée des menus, dessinée au pixel
 function boot() {
   S = load() || defaultState(); save(false);
   handCursor(); sizeScene();
-  if (autoGoals()) save(true);
+  if (autoGoals() | goalMilestones()) save(true);
   UI.game = computeGame(); UI.dlg = S.onboarded && !S.expenses.length ? idleDlg() : null;
   SCENE.cam = clampCam(0);
   renderUI(); progress(UI.game, true);
@@ -2577,7 +2612,7 @@ function boot() {
   const loop = now => {
     const dt = Math.min(.05, (now - last) / 1000); last = now;
     updateScene(dt, now); drawScene(now);
-    const m = new Date().getMinutes(); if (m !== lastMin) { lastMin = m; if (autoGoals()) save(true); renderUI(); }
+    const m = new Date().getMinutes(); if (m !== lastMin) { lastMin = m; if (autoGoals() | goalMilestones()) save(true); renderUI(); }
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);

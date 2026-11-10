@@ -160,10 +160,11 @@ Le bouton **🎁**, à côté de ⚙ en haut à droite, ouvre le Belvédère : l
 
 Les encaissements et décaissements hors budget ne touchent ni le budget, ni le budget du jour : seulement les prévisions, puis la trésorerie quand ils sont réalisés.
 
-**Prévisions** : trois chiffres (aujourd'hui, au plus bas, dans 12 mois) et **une barre par mois** : la trésorerie prévue à la fin du mois, verte au-dessus de zéro, rouge en dessous, avec un point doré quand une envie tombe ce mois-là. Toucher une barre affiche le mois, la trésorerie, le revenu et les budgets comptés. Le détail mois par mois reste disponible en dessous.
-- Chaque mois : + le revenu mensuel prévu + les encaissements de la Wish list − les budgets du mois − les décaissements hors budget. Une ligne plus chère que son budget pèse en plus. Le mois en cours ne compte que ce qui reste à dépenser.
-- Le revenu prévu se règle sur l'écran ; sans réglage, c'est la moyenne des rentrées des trois derniers mois.
-- Si la courbe passe sous zéro, l'écran dit quand et de combien : de quoi repousser une envie, ajuster un budget ou prévoir une rentrée.
+**Prévisions** : le **revenu mensuel prévu** se règle en haut de l'écran, avec le mois à partir duquel il s'applique (une augmentation en juillet, par exemple) ; les changements datés s'affichent dessous et se retirent d'un ×. Sans réglage, c'est la moyenne des rentrées des trois derniers mois.
+- Trois chiffres : aujourd'hui, au plus bas, et la **trésorerie disponible** dans 12 mois (hors épargne). Avec des objectifs, deux de plus : l'**épargne dans 12 mois** et le **total** (trésorerie + épargne).
+- **Une barre par mois** : la trésorerie disponible prévue à la fin du mois, verte au-dessus de zéro, rouge en dessous, avec un point doré quand une ligne de la Wish list tombe ce mois-là. Toucher une barre affiche le mois, la trésorerie, l'épargne, le revenu et les budgets comptés.
+- Chaque mois : + le revenu prévu + les encaissements de la Wish list − les budgets du mois − les versements vers les objectifs − les décaissements hors budget. Une ligne plus chère que son budget pèse en plus. Le mois en cours ne compte que ce qui reste à dépenser.
+- Si la courbe passe sous zéro, l'écran dit quand et de combien : de quoi repousser une ligne de la Wish list, ajuster un budget ou prévoir une rentrée.
 
 ## Noter : décaissement ou encaissement
 
@@ -176,21 +177,15 @@ Récentes montre les deux, mêlés par date.
 ## Les objectifs d'épargne (🎁 › Objectifs)
 
 Chaque objectif (Urgence, Logement, Mariage…) a une **cible**, une **échéance** et un **versement mensuel** :
-- au début de chaque mois, le versement prévu est **mis de côté tout seul** : la trésorerie baisse d'autant, l'objectif monte (le budget du jour ne bouge pas) ;
-- une **barre de progression** montre où il en est, le mois où il sera atteint à ce rythme, et prévient s'il arrive après l'échéance ;
-- **Verser** et **Retirer** à la main, **Modifier** la cible, l'échéance ou le versement (à partir du mois en cours) ;
-- une ligne de la Wish list peut être **payée par un objectif** (Type « ◆ Logement »…) : l'argent sort de l'objectif, la trésorerie ne bouge pas ;
-- les prévisions retirent chaque mois les versements prévus.
+- chaque mois, le versement prévu est **pris tout seul sur la trésorerie disponible**, en gardant toujours de quoi finir le budget du mois : si la trésorerie ne suffit pas, il verse ce qu'il peut et **complète dès qu'un encaissement arrive** (ton salaire) ;
+- une **barre de progression**, ce qui a été versé ce mois-ci, le mois où l'objectif sera atteint, et une alerte s'il arrive après l'échéance ;
+- **Verser** (dans la limite de la trésorerie disponible) et **Retirer** à la main, **Modifier** la cible, l'échéance ou le versement (à partir du mois en cours) ;
+- une ligne de la Wish list peut être **payée par un objectif** (Type « ◆ Logement »…) : l'argent sort de l'objectif, la trésorerie ne bouge pas.
 
-## Le plan (⚙ › Plan)
-
-Un bouton **Appliquer le plan** met en place le plan budgétaire en un geste :
-- **Budgets** : phase 1 dès décembre 2026 (chez les parents : alimentation 70 k, carburant et transport 60 k, téléphone et internet 20 k, couple 120 k, famille 40 k, santé et perso 30 k, imprévus 40 k = 380 k), phase 2 dès juillet 2027 (appartement : loyer 150 k, charges 45 k, alimentation 110 k = 615 k) ;
-- **Revenu prévu** : 850 000 F (salaire net de l'échéance du prêt) ;
-- **Objectifs** : Urgence (1 M), Logement (2 M pour juillet 2027), Mariage (3,5 M pour novembre 2028), avec leurs versements automatiques ;
-- **Wish list** : réparation voiture (470 k en décembre, 90 k en janvier) et écran MacBook (230 k en janvier) sur la trésorerie ; caution et équipement payés par l'objectif Logement ; démarches et cérémonie payées par l'objectif Mariage.
-
-Les catégories existantes sont renommées (Transport → Carburant & transport, Factures → Téléphone & internet, Loisirs → Couple, Divers → Imprévus, Santé → Santé & perso, Logement → Loyer) ; Famille et Charges maison sont créées ; les autres passent à 0 dès décembre. Les dépenses déjà notées ne bougent pas, et appliquer le plan deux fois ne crée pas de doublon.
+**Ce que l'épargne débloque dans le jeu :**
+- **un monument par objectif** dans la vallée, bâti un quart à la fois (25, 50, 75, 100 %) : le grenier fortifié de l'Urgence, ta maison pour le Logement, la chapelle et son jardin pour le Mariage, une statue pour les autres ;
+- **une fête à chaque palier** : feu d'artifice au-dessus de la vallée, banderoles dans la rue, robots qui sautent de joie, et Merlain qui l'annonce ;
+- **de l'XP** : 1 XP par tranche de 10 000 F versée, +100 XP par palier ; et la tenue **Gardien du trésor** quand un objectif est atteint.
 
 ## Les autres flux (hors budget)
 
