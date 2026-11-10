@@ -161,8 +161,8 @@ Le bouton **🎁**, à côté de ⚙ en haut à droite, ouvre le Belvédère : l
 Les encaissements et décaissements hors budget ne touchent ni le budget, ni le budget du jour : seulement les prévisions, puis la trésorerie quand ils sont réalisés.
 
 **Prévisions** : le **revenu mensuel prévu** se règle sous les barres (sans réglage, c'est la moyenne des rentrées des trois derniers mois). Il n'est pas ajouté au mois de la trésorerie d'ouverture : le salaire de ce mois-là y est déjà.
-- Trois chiffres : aujourd'hui, au plus bas, et la **trésorerie disponible** dans 12 mois (hors épargne). Avec des objectifs, deux de plus : l'**épargne dans 12 mois** et le **total** (trésorerie + épargne).
-- **Une barre par mois** : la trésorerie disponible prévue à la fin du mois, verte au-dessus de zéro, rouge en dessous, avec un point doré quand une ligne de la Wish list tombe ce mois-là. Toucher une barre affiche le mois, la trésorerie, l'épargne, le revenu et les budgets comptés.
+- Trois chiffres : ton argent aujourd'hui (trésorerie + épargne), la trésorerie au plus bas, et ton argent dans 12 mois (6 sur téléphone).
+- **Une barre par mois**, empilée : la **trésorerie disponible** (vert) et l'**épargne des objectifs** (doré) en fin de mois, avec le total au-dessus ; en rouge sous la ligne si la trésorerie passe sous zéro ; un point rose quand une ligne de la Wish list tombe ce mois-là. Toucher une barre affiche le total, la trésorerie, l'épargne, le revenu et les sorties du mois.
 - Chaque mois : + le revenu prévu + les encaissements de la Wish list − les budgets du mois − les versements vers les objectifs − les décaissements hors budget. Une ligne plus chère que son budget pèse en plus. Le mois en cours ne compte que ce qui reste à dépenser.
 - Si la courbe passe sous zéro, l'écran dit quand et de combien : de quoi repousser une ligne de la Wish list, ajuster un budget ou prévoir une rentrée.
 
