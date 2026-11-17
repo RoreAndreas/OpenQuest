@@ -870,7 +870,7 @@ const INCOME_CATS = {salaire: 'Salaire', prime: 'Prime', vente: 'Vente', cadeau:
    il se couvre de lierre ; chaque semaine de plus lui fait perdre une étape. ---- */
 const QUEST_CATS = {
   sport: {name: 'Sport', work: 'La statue du Penseur', icon: '💪', steps: ['les fondations', 'le piédestal', 'le rocher', 'les pieds', 'les jambes', 'le torse', 'le bras qui soutient la tête', 'la tête', 'les muscles ciselés', 'la statue achevée'], emb: ['la couronne de laurier dorée', 'les flambeaux', 'le jardin', "l'aura de bronze"]},
-  mind: {name: 'Mind', work: "L'arbre de la connaissance", icon: '🧠', steps: ['la graine', 'la pousse', 'le jeune tronc', 'les premières branches', 'les feuilles', 'la ramure', 'la grande canopée', 'les racines profondes', 'les feuilles lumineuses', "l'arbre achevé"], emb: ['les lanternes', 'les fruits dorés', 'le banc et le sentier', 'les lucioles']},
+  mind: {name: 'Mindset', work: "L'arbre de la connaissance", icon: '🧠', steps: ['la graine', 'la pousse', 'le jeune tronc', 'les premières branches', 'les feuilles', 'la ramure', 'la grande canopée', 'les racines profondes', 'les feuilles lumineuses', "l'arbre achevé"], emb: ['les lanternes', 'les fruits dorés', 'le banc et le sentier', 'les lucioles']},
 };
 const WORK_DAYS = 100, STEP_DAYS = 10, EMB_DAYS = 25, IVY_DAYS = 7;
 function questCatGuess(name) { const n = String(name || '').toLowerCase(); return /sport|muscu|course|courir|marche|gym|footing|pompe|abdo|vélo|natation|yoga|étirement/.test(n) ? 'sport' : /lire|lecture|livre|médit|prière|apprend|étud|cours|journal|écrire|langue|podcast/.test(n) ? 'mind' : null; }
@@ -1597,7 +1597,7 @@ function goalMonuments(g, pal, VW) {
   let k = 0;
   for (const x of S.goals) { const st = Math.max(goalStage(x), x.best || 0); if (!st) continue; const kind = goalKind(x), [gx, gp] = GOAL_SPOTS[kind] || [VALLEY.cx - 60 + (k++) * 70, .97]; drawMonument(g, kind, gx, gp, st, pal, VW); }
 }
-// Les ouvrages des quêtes : la statue du Penseur (Sport) et l'arbre de la connaissance (Mind), au premier plan de la vallée
+// Les ouvrages des quêtes : la statue du Penseur (Sport) et l'arbre de la connaissance (Mindset), au premier plan de la vallée
 const WORK_SPOTS = {sport: [VALLEY.cx + 42, .975], mind: [VALLEY.cx - 112, .985]};
 function questWorks(g, pal, VW) { for (const k of Object.keys(QUEST_CATS)) { const w = workState(k); if (!w.pts) continue; const [x, p] = WORK_SPOTS[k]; (k === 'sport' ? drawThinker : drawTree)(g, x, p, w, VW); } }
 function ivyOn(g, x0, y0, w, h, seed) { const r = rng(seed); for (let i = 0; i < w * h / 6; i++) { const px = x0 + r() * w, py = y0 + h - Math.pow(r(), .6) * h; P1(g, px, py, r() < .7 ? '#3e7a34' : '#5e9a44'); } for (let i = 0; i < 3; i++) { let cx = x0 + r() * w, cy = y0 + r() * h * .6; for (let k = 0; k < 5; k++) { P1(g, cx, cy, '#3a2e2e'); cx += r() < .5 ? 1 : 0; cy += 1; } } }
@@ -2399,7 +2399,7 @@ function lookPanel(g) { // l'apparence : les couleurs, et les accessoires gagné
   return `<div class="center">${robotImg(heroKey(), heroOutfit(), 72)}${robotImg(heroKey(), heroOutfit(), 72, {dir: 'right'})}</div>${slots}<div class="dim">Visière</div><div class="sws">${colors('eyes', LOOK_EYES)}</div><div class="dim">Cape, écharpe, foulard</div><div class="sws">${colors('cape', LOOK_CAPE)}</div><div class="dim">Corps</div><div class="sws">${colors('body', LOOK_BODY)}</div>`;
 }
 const catOptions = cur => `<option value="">Sans catégorie</option>${Object.entries(QUEST_CATS).map(([k, c]) => `<option value="${k}" ${cur === k ? 'selected' : ''}>${c.name}</option>`).join('')}`;
-function newQuestPanel() { return `<form data-form="habit"><input name="name" class="full" placeholder="Ex. 30 min de course, lire 10 pages" maxlength="50" required><label class="dim">Catégorie</label><select name="cat" class="full">${catOptions('')}</select><p class="dim">Une quête Sport fait grandir la statue du Penseur, une quête Mind l'arbre de la connaissance.</p><button class="ffbtn">Ajouter la quête</button></form>`; }
+function newQuestPanel() { return `<form data-form="habit"><input name="name" class="full" placeholder="Ex. 30 min de course, lire 10 pages" maxlength="50" required><label class="dim">Catégorie</label><select name="cat" class="full">${catOptions('')}</select><p class="dim">Une quête Sport fait grandir la statue du Penseur, une quête Mindset l'arbre de la connaissance.</p><button class="ffbtn">Ajouter la quête</button></form>`; }
 function worksPanel() { // les ouvrages des catégories de quêtes
   return `<p class="dim">Chaque jour où tu accomplis au moins une quête d'une catégorie, son ouvrage avance d'un jour dans la ville en contrebas : ${WORK_DAYS} jours pour l'achever, puis il s'embellit. Délaissé ${IVY_DAYS} jours, il se couvre de lierre ; chaque semaine de plus, il perd une étape.</p>
     <div class="list">${Object.entries(QUEST_CATS).map(([k, c]) => { const w = workState(k), nq = S.habits.filter(h => h.cat === k).length, done = w.stage >= 10, pct = Math.min(100, w.pts / WORK_DAYS * 100);
