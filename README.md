@@ -107,7 +107,7 @@ Entre ces étapes : des maisons, des arbres, des chemins et des potagers. La vil
 
 Chaque quête a une **catégorie** (Quêtes › + Quête ou Gérer) : **Sport** ou **Mindset**, ou aucune. Chaque catégorie bâtit un ouvrage dans la ville en contrebas, **selon la régularité** :
 - un jour compte dès qu'au moins une quête de la catégorie est accomplie ; **100 jours** achèvent l'ouvrage, en 10 étapes de 10 jours ;
-- **Sport** : **la statue du Penseur**, au fond de la vallée, là où la rivière se jette dans la mer. Sur la falaise de gauche se dresse un temple grec ; sur le cap d'en face, le Penseur le regarde, de profil : un héros de marbre blanc tout en muscles (épaules, biceps, dos, cuisses, mollets), barbu aux cheveux bouclés, le menton sur le poing, le coude sur le genou, assis sur son rocher. Le temple est vu de trois quarts, avec son fronton et sa colonnade ; les deux promontoires descendent en pente d'herbe vers la vallée, oliviers et cyprès plantés dessus. Il se sculpte de bas en haut (fondations, piédestal, rocher, pieds, jambes, torse, bras, tête, marbre poli, plaque dorée) ;
+- **Sport** : **la statue du Penseur**, au fond de la vallée, là où la rivière se jette dans la mer. Sur la falaise de gauche se dresse un temple grec ; sur le cap d'en face, le Penseur le regarde, de profil : un héros de marbre blanc tout en muscles (épaules, biceps, dos, cuisses, mollets), barbu aux cheveux bouclés, le menton sur le poing, le coude sur le genou, assis sur son rocher. Le temple est vu de trois quarts, avec son fronton et sa colonnade ; les deux promontoires descendent en pente d'herbe vers la vallée, oliviers et cyprès plantés dessus. Côté mer, leurs falaises de calcaire montrent leurs strates, et un **escalier de marbre** en zigzag y monte du rivage jusqu'au temple et jusqu'au Penseur. Il se sculpte de bas en haut (fondations, piédestal, rocher, pieds, jambes, torse, bras, tête, marbre poli, plaque dorée) ;
 - **Mindset** : **l'arbre de la connaissance**, de la graine à la grande canopée aux feuilles lumineuses ;
 - **achevé, il s'embellit** tous les 25 jours réguliers : couronne de laurier dorée, flambeaux, cyprès et fleurs, puis une aura qui fait luire sa tête la nuit ; ou lanternes, fruits dorés, banc et lucioles ;
 - **délaissé 7 jours**, il se couvre de lierre et de fissures ; **chaque semaine de plus fait tomber une étape**. Reprendre les quêtes efface le lierre ;
@@ -117,8 +117,8 @@ Chaque quête a une **catégorie** (Quêtes › + Quête ou Gérer) : **Sport** 
 
 Discrètes, sur ordinateur seulement (coupées sur téléphone et quand l'appareil demande moins d'animations) :
 - **le ciel** : les nuages dérivent avec le vent, plus vite par gros temps (sur téléphone aussi) ; une volée d'oiseaux de temps en temps, le dirigeable d'Ama, des étoiles filantes la nuit ;
-- **la vallée** : fumée des cheminées, ailes du moulin qui tournent, rivière et lac qui scintillent, barque qui glisse sur le lac ;
-- **la rue** : flammes des lanternes qui vacillent, un chat sur la balustrade qui remue la queue, des pigeons qui picorent puis s'envolent ;
+- **la vallée** : fumée des cheminées, ailes du moulin qui tournent, rivière et lac qui scintillent, barque qui glisse sur le lac ; **des passants** sur les chemins et la place, d'autant plus nombreux que la ville est construite (jusqu'à 90) ;
+- **la rue** : flammes des lanternes qui vacillent, un chat sur la balustrade qui remue la queue, des pigeons qui picorent puis s'envolent ; **des animaux** : des souris qui filent le long des façades, un chat roux qui se promène et fait sa toilette, un chien qui trotte et renifle, une poule qui picore devant le marché ; **de temps en temps, un oiseau** (pigeon, moineau ou goéland) se pose sur un toit ou une cheminée, regarde autour de lui, picore, puis repart ;
 - **l'ambiance de l'heure** : pétales et feuilles au vent, brume du matin sur la vallée (6 h – 10 h), poussière dorée du soir (17 h – 21 h), lucioles la nuit.
 
 ### L'heure et la météo
