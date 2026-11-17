@@ -107,7 +107,7 @@ Entre ces étapes : des maisons, des arbres, des chemins et des potagers. La vil
 
 Chaque quête a une **catégorie** (Quêtes › + Quête ou Gérer) : **Sport** ou **Mind**, ou aucune. Chaque catégorie bâtit un ouvrage dans la ville en contrebas, **selon la régularité** :
 - un jour compte dès qu'au moins une quête de la catégorie est accomplie ; **100 jours** achèvent l'ouvrage, en 10 étapes de 10 jours ;
-- **Sport** : la **statue géante du Penseur**, un héros grec musclé assis sur son rocher, sculptée de bas en haut (fondations, piédestal, rocher, pieds, jambes, torse, bras, tête, muscles ciselés, plaque dorée) ;
+- **Sport** : la **statue géante du Penseur**, un héros grec de marbre, barbu aux cheveux bouclés, le menton sur le poing, la draperie sur les cuisses, assis sur son rocher ; sculptée de bas en haut (fondations, piédestal, rocher, pieds, jambes, torse, bras, tête, muscles ciselés, plaque dorée) ;
 - **Mind** : **l'arbre de la connaissance**, de la graine à la grande canopée aux feuilles lumineuses ;
 - **achevé, il s'embellit** tous les 25 jours réguliers : couronne de laurier, flambeaux, jardin et statue de bronze doré ; ou lanternes, fruits dorés, banc et lucioles ;
 - **délaissé 7 jours**, il se couvre de lierre et de fissures ; **chaque semaine de plus fait tomber une étape**. Reprendre les quêtes efface le lierre ;

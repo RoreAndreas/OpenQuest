@@ -1601,37 +1601,82 @@ function goalMonuments(g, pal, VW) {
 const WORK_SPOTS = {sport: [VALLEY.cx + 42, .975], mind: [VALLEY.cx - 112, .985]};
 function questWorks(g, pal, VW) { for (const k of Object.keys(QUEST_CATS)) { const w = workState(k); if (!w.pts) continue; const [x, p] = WORK_SPOTS[k]; (k === 'sport' ? drawThinker : drawTree)(g, x, p, w, VW); } }
 function ivyOn(g, x0, y0, w, h, seed) { const r = rng(seed); for (let i = 0; i < w * h / 6; i++) { const px = x0 + r() * w, py = y0 + h - Math.pow(r(), .6) * h; P1(g, px, py, r() < .7 ? '#3e7a34' : '#5e9a44'); } for (let i = 0; i < 3; i++) { let cx = x0 + r() * w, cy = y0 + r() * h * .6; for (let k = 0; k < 5; k++) { P1(g, cx, cy, '#3a2e2e'); cx += r() < .5 ? 1 : 0; cy += 1; } } }
-// Le Penseur, de profil : assis sur son rocher, penché en avant, le coude sur le genou et le menton sur le poing
+// Le penseur grec, en marbre, de trois quarts face : barbe et cheveux bouclés, le menton sur le poing, une jambe repliée sur
+// le rocher, la draperie sur les cuisses. Masque : L lumière, M marbre, D ombre, K ombre profonde, r/R rocher.
 const THINKER = [
-  '........sss...............', '.......sxxxs..............', '......sxxxxxs.............', '......xxxxxxs.............', '......xxxxxxs.............',
-  '.......xxxxs..............', '......hxx.xxs.............', '.....hxxx.xxxxs...........', '.....xxx..xxxxxxs.........', '.....xxx..xxxxxxxs........',
-  '.....xxx..xxxxxxxxs.......', '.....xxx...xxxxxxxs.......', '.....xxx...xxxxxxxxs......', '.....xxx...xxxxxxxxs......', '.....xxx....xxxxxxxs......',
-  '.....xxx....xxxxxxxxs.....', '....hxxxxxxxxxxxxxxxs.....', '...hxxxxxxxxxxxxxxxxxs....', '...xxxxxxxxxxxxxxxxxxxs...', '...xxxs.....rrrrrrrrrrrr..',
-  '...xxxs....rrrrrrrrrrrrrr.', '...xxxs....rrrrrrrrrrrrrr.', '...xxxs....rrrrrrrrrrrrrr.', '...xxxs....rrrrrrrrrrrrrr.', '..hxxxs....rrrrrrrrrrrrrr.',
-  '.xxxxxs....rrrrrrrrrrrrrr.'];
-const THINKER_ROWS = {4: [22, 25], 5: [16, 21], 6: [11, 15], 7: [6, 10], 8: [0, 5]}; // l'étape qui sculpte chaque tranche du corps
-function drawThinker(g, x, p, w, VW) { // un héros grec musclé dans la pose du Penseur ; il se sculpte de bas en haut
-  const s = vs(p) * 1.6, y = vy(p), st = w.stage, emb = w.emb, W = 26, H = THINKER.length, ped = 6, U = v => Math.round(v * s);
-  const X = c => x + Math.round((c - W / 2) * s), Y = r => y - Math.round((H + ped - r) * s), cell = (c, r, col) => R(g, X(c), Y(r), Math.max(1, Math.round(s)), Math.max(1, Math.round(s)), col);
-  const gold = emb >= 4, fin = st >= 9, body = gold ? ['#e8c070', '#b8862e', '#fff1b0'] : fin ? ['#ece6dc', '#b8ae9e', '#ffffff'] : ['#d8d0c4', '#d8d0c4', '#d8d0c4'];
-  g.fillStyle = 'rgba(30,20,30,.3)'; g.beginPath(); g.ellipse(x, y, (W / 2 + 4) * s, 3 * s, 0, 0, 7); g.fill();
-  if (st >= 1) R(g, X(-2), y - U(1), U(W + 4), U(1), '#a89888');                                            // les fondations
-  if (st >= 2) { R(g, X(0), Y(H), U(W), U(ped), '#d8ccc0'); R(g, X(-1), Y(H), U(W + 2), U(1), '#ece2d8'); R(g, X(0), Y(H) + U(ped - 1), U(W), U(1), '#b8ac9c'); } // le piédestal
-  if (st >= 10) R(g, X(9), Y(H) + U(2), U(8), U(2), '#e8c070');                                               // la plaque dorée
+  "............LLMLLMLD..................",
+  "........LLMLLLLLLLLK..................",
+  "........LLLLMMLMMLDDD.................",
+  "........LLLMDMDKMDMLDK................",
+  "........MLMKKKKKKKMMDK................",
+  "........LLKKKLLLDDMMMMK...............",
+  ".......LLMKDLLLMDDDDLMK...............",
+  ".......LMDDLLLLLMDDLMDK...............",
+  ".......KKKKLLLLMMMKLMMK...............",
+  "..........KLMMDDMKKKDDK...............",
+  "...........MKKKKKKDDKK................",
+  "...........DLLMLLMLD..................",
+  "..........MMLLLLLMLKK.................",
+  ".........DMLMMLMDMDKK.................",
+  "..........DDMMDKMMKK..................",
+  "...........KKKKKDDKLK.................",
+  ".....LMMMMDDLLLDKKDMDDLMMMK...........",
+  ".....MDDDDKLMLMKLDDDKMDDDDDK..........",
+  "....LKLLDDMDDDDKDLLLLDDKLDDK..........",
+  "....KLMLDDMDMDKMLLLLMDDLMMDK..........",
+  ".....DMLMKMKMMDDLLLMMMKLLMDK..........",
+  ".....KLMMKDLMDLKDDMDDKKDDMMK..........",
+  "......KDMDDLLKDMDDKKKKLDKDMDK.........",
+  ".......LMDKLMKDLDMDMMLMK.LMMK.........",
+  ".......KDDLMDKLMMLDDMLMK.KDMK.........",
+  "........MDLLKLLLLMDDLLDK..MKDK........",
+  "........KDLMKLLLMMMKLMKK..DLLK........",
+  ".........DLMKLLMDMDKMDK.LLLMMDK.......",
+  ".........DDDKLMDDKKKDKLLMLMDKKLK......",
+  "..........KKMDKDDKLLDMMMDKKKMLMMK.....",
+  "...........MDMDDKLMLDDDKKLLMLLLDK.....",
+  "........LLLKDDDDDDMMDKLMLLLMLMDKK.....",
+  ".....LMLLLDDLLMLLDDKKLMLLLDMMDKK......",
+  "...LLMLLLMLLLMLLMKLLLMLLLDMDKKK.......",
+  "..LLLMLLLLLLLLLMMMLLLMLLMKDKKLDrrR....",
+  "..LLMLLLMMMMMLMMLLLLLLLMKDKKLMDrrrR...",
+  "..LDLMMDDDDMLMMLLLLLLLMKDDKLLLKrrrR...",
+  "..KKMDDKDDMLMMLLLLLLMMDKDKKLLMKrrrrR..",
+  "...KKKKKKDMMMLLLLLMMDDKDDKRLLMKrrrrR..",
+  "....LLLK.MMMLLMMLMDDDKDDKKRLLMKrrrrrR.",
+  "....LLMK.KDLLMMLMMKDDKDDKKRLLMKRrrrrR.",
+  "....LLMK..LLMMLMDDKDDKDDKrRLLMKrrrrrR.",
+  "....LLMK..LMDLMKDDKDDKDDKrRLMMKrRrrrR.",
+  "....LMMK..KDMMDKDDKDDKDKKrRDDMKrrrrrR.",
+  "....KDMK...LDDDKDDKDDKDKrrrRLMKrrRrrR.",
+  ".....LMK...KKKKKKKKKKKKKrrrRLMKrrrrrR.",
+  ".....DKK.......rrrrrrrrRrrrRDKKrrrRrR.",
+  "...LMMMMK......rrrRrrrrrrrRLMMMMDrrrR.",
+  "...KKKKKK......rrrrrrrrrRrRKKKKKKrrRR.",
+  "......................................"];
+const THINKER_ROWS = {4: [42, 49], 5: [34, 41], 6: [26, 33], 7: [17, 25], 8: [0, 16]}; // l'étape qui sculpte chaque tranche, de bas en haut
+function drawThinker(g, x, p, w, VW) { // un héros grec musclé dans la pose du penseur ; il se sculpte de bas en haut
+  const s = vs(p) * 1.15, y = vy(p), st = w.stage, emb = w.emb, W = THINKER[0].length, H = THINKER.length, ped = 5, U = v => Math.round(v * s), px = Math.max(1, Math.ceil(s));
+  const X = c => x + Math.round((c - W / 2) * s), Y = r => y - Math.round((H + ped - r) * s), cell = (c, r, col) => R(g, X(c), Y(r), px, px, col);
+  const fin = st >= 9, gold = emb >= 4;
+  const pal = gold ? {L: '#fff1b0', M: '#e8c070', D: '#b8862e', K: '#7a5418'} : fin ? {L: '#ffffff', M: '#e6e1d8', D: '#a8a196', K: '#6a645c'} : {L: '#ddd6ca', M: '#d4ccc0', D: '#bdb4a6', K: '#a49b8c'};
+  g.fillStyle = 'rgba(30,20,30,.3)'; g.beginPath(); g.ellipse(x, y, (W / 2 + 3) * s, 3 * s, 0, 0, 7); g.fill();
+  if (st >= 1) R(g, X(-1), y - U(1), U(W + 2), U(1), '#a89888');                                              // les fondations
+  if (st >= 2) { R(g, X(1), Y(H), U(W - 2), U(ped), '#d8ccc0'); R(g, X(0), Y(H), U(W), U(1), '#ece2d8'); R(g, X(1), Y(H) + U(ped - 1), U(W - 2), U(1), '#b8ac9c'); } // le piédestal
+  if (st >= 10) R(g, X(W / 2 - 5), Y(H) + U(2), U(10), U(2), '#e8c070');                                             // la plaque dorée
   for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
     const ch = THINKER[r][c]; if (ch === '.') continue;
-    if (ch === 'r') { if (st >= 3) cell(c, r, (r + c) % 5 ? '#9a8e84' : '#b4a89c'); continue; }              // le rocher
+    if (ch === 'r' || ch === 'R') { if (st >= 3) cell(c, r, ch === 'R' ? '#7e746c' : '#9a8e84'); continue; }  // le rocher
     const band = Object.entries(THINKER_ROWS).find(([, [a, b]]) => r >= a && r <= b); if (!band || st < +band[0]) continue;
-    cell(c, r, ch === 's' ? body[1] : ch === 'h' ? body[2] : body[0]);
+    cell(c, r, pal[ch]);
   }
-  if (fin) { cell(7, 3, '#3a3438'); for (const [c, r] of [[13, 10], [14, 12], [13, 14], [8, 17], [12, 18]]) cell(c, r, body[1]); }   // l'œil, les muscles ciselés
-  if (st < 10) { const top = st >= 8 ? 0 : st >= 3 ? (THINKER_ROWS[st] ? THINKER_ROWS[st][0] : 19) - 3 : H - 2, xl = X(-2), xr = X(W + 1), yt = Y(Math.max(0, top)); // l'échafaudage
-    R(g, xl, yt, 1, y - yt, '#a87850'); R(g, xr, yt, 1, y - yt, '#a87850'); for (let yy = yt; yy < y; yy += U(4)) R(g, xl, yy, xr - xl, 1, '#c8a060'); }
-  if (emb >= 1) { for (const c of [6, 8, 10, 12]) cell(c, 0, '#ffd166'); cell(5, 1, '#ffd166'); }            // la couronne de laurier
-  if (emb >= 2) for (const c of [-3, W + 2]) { R(g, X(c), Y(H - 10), Math.max(1, U(1)), U(10), '#5a4a3a'); R(g, X(c) - 1, Y(H - 11), U(2), U(2), '#ffb040'); VW.push([X(c) - 1, Y(H - 11), U(2), U(2)]); } // les flambeaux
+  if (st < 10) { const top = st >= 8 ? 0 : st >= 4 ? THINKER_ROWS[st][0] - 3 : H - 14, xl = X(-1), xr = X(W), yt = Y(Math.max(0, top)); // l'échafaudage
+    R(g, xl, yt, 1, y - yt, '#a87850'); R(g, xr, yt, 1, y - yt, '#a87850'); for (let yy = yt; yy < y; yy += U(5)) R(g, xl, yy, xr - xl, 1, '#c8a060'); }
+  if (emb >= 1) for (const [c, r] of [[8, 3], [9, 2], [11, 1], [13, 0], [17, 0], [19, 1], [20, 2], [21, 3]]) cell(c, r, '#ffd166');                              // la couronne de laurier
+  if (emb >= 2) for (const c of [-3, W + 2]) { R(g, X(c), Y(H - 12), Math.max(1, U(1)), U(12), '#5a4a3a'); R(g, X(c) - 1, Y(H - 13), U(2), U(2), '#ffb040'); VW.push([X(c) - 1, Y(H - 13), U(2), U(2)]); } // les flambeaux
   if (emb >= 3) for (let c = -4; c < W + 4; c += 2) { R(g, X(c), y - 1, U(1), 1, '#56a040'); P1(g, X(c), y - 2, ['#ff6fa8', '#ffd166', '#f4f4f4'][(c + 4) % 3]); } // le jardin
-  if (emb >= 4) VW.push([X(6), Y(0), U(6), U(2)]);                                                            // l'aura : la tête luit la nuit
-  if (w.ivy) ivyOn(g, X(0), Y(H - 8), U(W), U(8 + ped), 7);
+  if (emb >= 4) VW.push([X(8), Y(0), U(14), U(2)]);                                                          // l'aura : la tête luit la nuit
+  if (w.ivy) ivyOn(g, X(1), Y(H - 10), U(W - 2), U(10 + ped), 7);
 }
 function drawTree(g, x, p, w, VW) { // l'arbre de la connaissance : il grandit branche par branche
   const s = vs(p) * 1.25, y = vy(p), st = w.stage, emb = w.emb, U = v => Math.round(v * s), r = rng(5);
