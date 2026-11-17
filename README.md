@@ -103,7 +103,17 @@ Au début, la vallée est vide : des champs, des haies, une rivière.
 
 Entre ces étapes : des maisons, des arbres, des chemins et des potagers. La ville est complète au bout de 200 jours tenus.
 
-### Les petites animations du fond
+#### Les ouvrages des quêtes
+
+Chaque quête a une **catégorie** (Quêtes › + Quête ou Gérer) : **Sport** ou **Mind**, ou aucune. Chaque catégorie bâtit un ouvrage dans la ville en contrebas, **selon la régularité** :
+- un jour compte dès qu'au moins une quête de la catégorie est accomplie ; **100 jours** achèvent l'ouvrage, en 10 étapes de 10 jours ;
+- **Sport** : la **statue géante du Penseur**, un héros grec musclé assis sur son rocher, sculptée de bas en haut (fondations, piédestal, rocher, pieds, jambes, torse, bras, tête, muscles ciselés, plaque dorée) ;
+- **Mind** : **l'arbre de la connaissance**, de la graine à la grande canopée aux feuilles lumineuses ;
+- **achevé, il s'embellit** tous les 25 jours réguliers : couronne de laurier, flambeaux, jardin et statue de bronze doré ; ou lanternes, fruits dorés, banc et lucioles ;
+- **délaissé 7 jours**, il se couvre de lierre et de fissures ; **chaque semaine de plus fait tomber une étape**. Reprendre les quêtes efface le lierre ;
+- Quêtes › **Ouvrages** montre la progression, l'étape suivante et l'alerte de lierre ; chaque étape rapporte 20 XP (100 par embellissement), et l'ouvrage achevé déclenche une fête.
+
+## Les petites animations du fond
 
 Discrètes, sur ordinateur seulement (coupées sur téléphone et quand l'appareil demande moins d'animations) :
 - **le ciel** : nuages qui glissent, une volée d'oiseaux de temps en temps, le dirigeable d'Ama, des étoiles filantes la nuit ;

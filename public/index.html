@@ -130,6 +130,9 @@ button.li{cursor:pointer} button.li:hover{background:rgba(255,255,255,.08)}
 .flowform .f-goal{display:none}.flowform:has(input[value=save]:checked) .f-goal,.flowform:has(input[value=withdraw]:checked) .f-goal{display:block}
 .flowform:has(input[value=save]:checked) .f-who,.flowform:has(input[value=withdraw]:checked) .f-who{display:none}
 .flowform:has(input[value=gift]:checked) .f-cash,.flowform:has(input[value=save]:checked) .f-cash,.flowform:has(input[value=withdraw]:checked) .f-cash,.flowform:has(input[value=owe-paid]:checked) .f-cash{display:none}
+.qcat{font-style:normal;font-size:13px;padding:0 5px;border-radius:3px;margin-left:4px;vertical-align:middle;color:#0c1250;text-shadow:none}.q-sport{background:#ffb070}.q-mind{background:#7cf0c8}
+.qrow select{width:7.5em;font-size:16px}
+@media (max-width:640px){ .qrow{flex-wrap:wrap} .qrow input.grow{flex:1 1 100%} }
 .gbar{position:relative;display:block;height:14px;background:#06061a;border:1px solid #9aa4e0;border-radius:3px;overflow:hidden}
 .gbar i{display:block;height:100%;background:linear-gradient(90deg,#4ab04a,#9ff0a0)}
 .gbar em{position:absolute;inset:0;text-align:center;font-style:normal;font-size:14px;line-height:12px;text-shadow:1px 1px 0 #000}
@@ -862,6 +865,26 @@ const heroImg = (size = 48, opt = {}) => robotImg(heroKey(), heroOutfit(), size,
 /* ---------------- STATE ---------------- */
 // Les catégories de rentrées
 const INCOME_CATS = {salaire: 'Salaire', prime: 'Prime', vente: 'Vente', cadeau: 'Cadeau reçu', autre: 'Autre'};
+/* ---- Les catégories de quêtes et leurs ouvrages : chaque jour où une quête de la catégorie est accomplie fait avancer
+   son ouvrage dans la ville en contrebas (100 jours pour l'achever, en 10 étapes) ; il s'embellit ensuite. Délaissé 7 jours,
+   il se couvre de lierre ; chaque semaine de plus lui fait perdre une étape. ---- */
+const QUEST_CATS = {
+  sport: {name: 'Sport', work: 'La statue du Penseur', icon: '💪', steps: ['les fondations', 'le piédestal', 'le rocher', 'les pieds', 'les jambes', 'le torse', 'le bras qui soutient la tête', 'la tête', 'les muscles ciselés', 'la statue achevée'], emb: ['la couronne de laurier dorée', 'les flambeaux', 'le jardin', "l'aura de bronze"]},
+  mind: {name: 'Mind', work: "L'arbre de la connaissance", icon: '🧠', steps: ['la graine', 'la pousse', 'le jeune tronc', 'les premières branches', 'les feuilles', 'la ramure', 'la grande canopée', 'les racines profondes', 'les feuilles lumineuses', "l'arbre achevé"], emb: ['les lanternes', 'les fruits dorés', 'le banc et le sentier', 'les lucioles']},
+};
+const WORK_DAYS = 100, STEP_DAYS = 10, EMB_DAYS = 25, IVY_DAYS = 7;
+function questCatGuess(name) { const n = String(name || '').toLowerCase(); return /sport|muscu|course|courir|marche|gym|footing|pompe|abdo|vélo|natation|yoga|étirement/.test(n) ? 'sport' : /lire|lecture|livre|médit|prière|apprend|étud|cours|journal|écrire|langue|podcast/.test(n) ? 'mind' : null; }
+function workState(cat) { // la progression d'un ouvrage, recalculée jour par jour depuis le journal des quêtes
+  const ids = new Set(S.habits.filter(h => h.cat === cat).map(h => h.id).concat(S.oldHabits.filter(h => h.cat === cat).map(h => h.id)));
+  const days = Object.keys(S.habitLog).filter(d => Object.keys(S.habitLog[d]).some(id => S.habitLog[d][id] && ids.has(id))).sort();
+  if (!days.length) return {pts: 0, stage: 0, emb: 0, idle: 0, ivy: false, lost: 0, any: ids.size > 0};
+  const done = new Set(days), t = today(); let pts = 0, idle = 0, lost = 0;
+  for (let d = days[0]; d <= t; d = addDays(d, 1)) {
+    if (done.has(d)) { pts = Math.min(WORK_DAYS + EMB_DAYS * 4, pts + 1); idle = 0; }
+    else if (d < t) { idle++; if (idle >= IVY_DAYS * 2 && (idle - IVY_DAYS * 2) % IVY_DAYS === 0) { const before = pts; pts = Math.max(0, pts - STEP_DAYS); lost += before - pts > 0 ? 1 : 0; } }
+  }
+  return {pts, stage: Math.min(10, Math.floor(Math.min(pts, WORK_DAYS) / STEP_DAYS)), emb: Math.max(0, Math.min(4, Math.floor((pts - WORK_DAYS) / EMB_DAYS))), idle, ivy: idle >= IVY_DAYS && pts > 0, any: true};
+}
 function defaultState() {
   return {
     version: 1, createdAt: today(), heroName: '', sound: true, lastLevel: 1, seenAch: [], lastCat: 'alim',
@@ -888,8 +911,8 @@ function defaultState() {
     checkins: {},         // { 'YYYY-MM-DD': true } — journées sans dépense
     habits: [
       {id: uid(), name: 'Aucun achat impulsif'},
-      {id: uid(), name: 'Sport 20 min'},
-      {id: uid(), name: 'Lire 10 pages'},
+      {id: uid(), name: 'Sport 20 min', cat: 'sport'},
+      {id: uid(), name: 'Lire 10 pages', cat: 'mind'},
     ],
     habitLog: {},         // { date: { habitId: true } }
     trackers: [
@@ -904,6 +927,7 @@ function migrate(s) {
   for (const k of Object.keys(d)) if (s[k] === undefined) s[k] = d[k];
   for (const k of ['categories','expenses','habits','trackers','seenAch','incomes','refunds','wishes','oldHabits','flows','goals']) if (!Array.isArray(s[k])) s[k] = d[k];
   if (s.expectedIncome != null && !isFinite(+s.expectedIncome)) s.expectedIncome = null;
+  for (const h of s.habits) if (!('cat' in h)) h.cat = questCatGuess(h.name);
   delete s.incomePlan; // les revenus datés ne sont plus utilisés : un seul revenu mensuel prévu
   if (s.startCash != null && !isFinite(+s.startCash)) s.startCash = null;
   if (typeof s.startDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s.startDate)) s.startDate = s.createdAt || today();
@@ -1027,6 +1051,17 @@ function autoSavings() { // l'épargne automatique : 10 % de chaque salaire, et 
   return n;
 }
 const STAGE_NAMES = ['', 'les fondations', 'les murs', 'le toit', 'la touche finale'];
+function workMilestones() { // l'ouvrage gagne ou perd une étape : on le dit
+  S.world.works = S.world.works || {}; let changed = false;
+  for (const [k, c] of Object.entries(QUEST_CATS)) {
+    const w = workState(k), lv = w.stage + w.emb, prev = S.world.works[k] || {lv: 0, best: 0};
+    if (lv === prev.lv) continue;
+    if (lv > prev.lv) { const part = w.emb && lv > 10 ? c.emb[w.emb - 1] : c.steps[w.stage - 1]; toast(c.work, lv === 10 ? 'Achevé ! La cité fait la fête.' : `Nouvelle étape : ${part}.`); if (lv === 10 || lv === 14) { SCENE.fest = {until: performance.now() + 14000, big: true}; fanfare(); } else SFX.quest(); }
+    else toast(c.work, 'Délaissé trop longtemps : une étape s\'est effondrée sous le lierre.');
+    S.world.works[k] = {lv, best: Math.max(prev.best || 0, lv)}; changed = true;
+  }
+  return changed;
+}
 function goalMilestones() { // un palier franchi (25, 50, 75, 100 %) : le monument grandit, la cité fait la fête
   let hit = null;
   for (const x of S.goals) { const st = goalStage(x); if (st > (x.best || 0)) { x.best = st; hit = {x, st}; } }
@@ -1199,7 +1234,8 @@ function computeGame() {
   for (const id in W_.chests) { const ch = CHESTS.find(x => x.id === id); if (ch) { xp += ch.xp; nChests++; } }
   if (Array.isArray(W_.found)) xp += 10 * W_.found.length;
   // l'épargne : 1 XP par tranche de 10 000 F versée dans un objectif, +100 XP par palier de 25 % franchi
-  for (const x of S.goals) xp += Math.floor(Math.max(0, goalSaved(x)) / 10000) + 100 * (x.best || 0); // lieux découverts dans l'ancienne carte : l'XP est conservée
+  for (const x of S.goals) xp += Math.floor(Math.max(0, goalSaved(x)) / 10000) + 100 * (x.best || 0);
+  for (const k in (W_.works || {})) { const b = W_.works[k].best || 0; xp += 20 * Math.min(b, 10) + 100 * Math.max(0, b - 10); } // les ouvrages des quêtes // lieux découverts dans l'ancienne carte : l'XP est conservée
 
   let level = 1, base = 0; while (xp >= base + xpNeed(level)) { base += xpNeed(level); level++; }
 
@@ -1548,6 +1584,7 @@ function valleyLayer(n, chantier, tod) {
   for (const it of built.filter(it => !['lake', 'pave', 'square', 'garden'].includes(it.kind))) D(it);
   if (chantier && plan[n]) scaffold(g, plan[n]);
   goalMonuments(g, pal, VW);
+  questWorks(g, pal, VW);
   if (tod === 'night') { g.save(); g.globalCompositeOperation = 'source-atop'; g.fillStyle = 'rgba(10,10,40,.5)'; g.fillRect(0, 0, W, SH); g.restore(); }
   if (tod !== 'day') for (const [x, y, w, h] of VW) R(g, x, y, w, h, '#f0b070');
   return c;
@@ -1555,10 +1592,64 @@ function valleyLayer(n, chantier, tod) {
 // Chaque objectif bâtit son monument dans la vallée, un quart à la fois (25, 50, 75, 100 %)
 const goalKind = x => /urgen|secour|impr/i.test(x.name) ? 'granary' : /loge|maison|appart/i.test(x.name) ? 'house' : /mariag|noce/i.test(x.name) ? 'chapel' : 'statue';
 const goalStage = x => x.target ? Math.min(4, Math.floor(goalSaved(x) / x.target * 4 + 1e-9)) : 0;
-const GOAL_SPOTS = {granary: [VALLEY.cx + 250, .8], house: [VALLEY.cx - 255, .9], chapel: [VALLEY.cx + 150, .93]};
+const GOAL_SPOTS = {granary: [VALLEY.cx - 200, .86], house: [VALLEY.cx - 268, .91], chapel: [VALLEY.cx + 122, .93]}; // dans la partie de la vallée visible sur téléphone
 function goalMonuments(g, pal, VW) {
   let k = 0;
   for (const x of S.goals) { const st = Math.max(goalStage(x), x.best || 0); if (!st) continue; const kind = goalKind(x), [gx, gp] = GOAL_SPOTS[kind] || [VALLEY.cx - 60 + (k++) * 70, .97]; drawMonument(g, kind, gx, gp, st, pal, VW); }
+}
+// Les ouvrages des quêtes : la statue du Penseur (Sport) et l'arbre de la connaissance (Mind), au premier plan de la vallée
+const WORK_SPOTS = {sport: [VALLEY.cx + 42, .975], mind: [VALLEY.cx - 112, .985]};
+function questWorks(g, pal, VW) { for (const k of Object.keys(QUEST_CATS)) { const w = workState(k); if (!w.pts) continue; const [x, p] = WORK_SPOTS[k]; (k === 'sport' ? drawThinker : drawTree)(g, x, p, w, VW); } }
+function ivyOn(g, x0, y0, w, h, seed) { const r = rng(seed); for (let i = 0; i < w * h / 6; i++) { const px = x0 + r() * w, py = y0 + h - Math.pow(r(), .6) * h; P1(g, px, py, r() < .7 ? '#3e7a34' : '#5e9a44'); } for (let i = 0; i < 3; i++) { let cx = x0 + r() * w, cy = y0 + r() * h * .6; for (let k = 0; k < 5; k++) { P1(g, cx, cy, '#3a2e2e'); cx += r() < .5 ? 1 : 0; cy += 1; } } }
+// Le Penseur, de profil : assis sur son rocher, penché en avant, le coude sur le genou et le menton sur le poing
+const THINKER = [
+  '........sss...............', '.......sxxxs..............', '......sxxxxxs.............', '......xxxxxxs.............', '......xxxxxxs.............',
+  '.......xxxxs..............', '......hxx.xxs.............', '.....hxxx.xxxxs...........', '.....xxx..xxxxxxs.........', '.....xxx..xxxxxxxs........',
+  '.....xxx..xxxxxxxxs.......', '.....xxx...xxxxxxxs.......', '.....xxx...xxxxxxxxs......', '.....xxx...xxxxxxxxs......', '.....xxx....xxxxxxxs......',
+  '.....xxx....xxxxxxxxs.....', '....hxxxxxxxxxxxxxxxs.....', '...hxxxxxxxxxxxxxxxxxs....', '...xxxxxxxxxxxxxxxxxxxs...', '...xxxs.....rrrrrrrrrrrr..',
+  '...xxxs....rrrrrrrrrrrrrr.', '...xxxs....rrrrrrrrrrrrrr.', '...xxxs....rrrrrrrrrrrrrr.', '...xxxs....rrrrrrrrrrrrrr.', '..hxxxs....rrrrrrrrrrrrrr.',
+  '.xxxxxs....rrrrrrrrrrrrrr.'];
+const THINKER_ROWS = {4: [22, 25], 5: [16, 21], 6: [11, 15], 7: [6, 10], 8: [0, 5]}; // l'étape qui sculpte chaque tranche du corps
+function drawThinker(g, x, p, w, VW) { // un héros grec musclé dans la pose du Penseur ; il se sculpte de bas en haut
+  const s = vs(p) * 1.6, y = vy(p), st = w.stage, emb = w.emb, W = 26, H = THINKER.length, ped = 6, U = v => Math.round(v * s);
+  const X = c => x + Math.round((c - W / 2) * s), Y = r => y - Math.round((H + ped - r) * s), cell = (c, r, col) => R(g, X(c), Y(r), Math.max(1, Math.round(s)), Math.max(1, Math.round(s)), col);
+  const gold = emb >= 4, fin = st >= 9, body = gold ? ['#e8c070', '#b8862e', '#fff1b0'] : fin ? ['#ece6dc', '#b8ae9e', '#ffffff'] : ['#d8d0c4', '#d8d0c4', '#d8d0c4'];
+  g.fillStyle = 'rgba(30,20,30,.3)'; g.beginPath(); g.ellipse(x, y, (W / 2 + 4) * s, 3 * s, 0, 0, 7); g.fill();
+  if (st >= 1) R(g, X(-2), y - U(1), U(W + 4), U(1), '#a89888');                                            // les fondations
+  if (st >= 2) { R(g, X(0), Y(H), U(W), U(ped), '#d8ccc0'); R(g, X(-1), Y(H), U(W + 2), U(1), '#ece2d8'); R(g, X(0), Y(H) + U(ped - 1), U(W), U(1), '#b8ac9c'); } // le piédestal
+  if (st >= 10) R(g, X(9), Y(H) + U(2), U(8), U(2), '#e8c070');                                               // la plaque dorée
+  for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
+    const ch = THINKER[r][c]; if (ch === '.') continue;
+    if (ch === 'r') { if (st >= 3) cell(c, r, (r + c) % 5 ? '#9a8e84' : '#b4a89c'); continue; }              // le rocher
+    const band = Object.entries(THINKER_ROWS).find(([, [a, b]]) => r >= a && r <= b); if (!band || st < +band[0]) continue;
+    cell(c, r, ch === 's' ? body[1] : ch === 'h' ? body[2] : body[0]);
+  }
+  if (fin) { cell(7, 3, '#3a3438'); for (const [c, r] of [[13, 10], [14, 12], [13, 14], [8, 17], [12, 18]]) cell(c, r, body[1]); }   // l'œil, les muscles ciselés
+  if (st < 10) { const top = st >= 8 ? 0 : st >= 3 ? (THINKER_ROWS[st] ? THINKER_ROWS[st][0] : 19) - 3 : H - 2, xl = X(-2), xr = X(W + 1), yt = Y(Math.max(0, top)); // l'échafaudage
+    R(g, xl, yt, 1, y - yt, '#a87850'); R(g, xr, yt, 1, y - yt, '#a87850'); for (let yy = yt; yy < y; yy += U(4)) R(g, xl, yy, xr - xl, 1, '#c8a060'); }
+  if (emb >= 1) { for (const c of [6, 8, 10, 12]) cell(c, 0, '#ffd166'); cell(5, 1, '#ffd166'); }            // la couronne de laurier
+  if (emb >= 2) for (const c of [-3, W + 2]) { R(g, X(c), Y(H - 10), Math.max(1, U(1)), U(10), '#5a4a3a'); R(g, X(c) - 1, Y(H - 11), U(2), U(2), '#ffb040'); VW.push([X(c) - 1, Y(H - 11), U(2), U(2)]); } // les flambeaux
+  if (emb >= 3) for (let c = -4; c < W + 4; c += 2) { R(g, X(c), y - 1, U(1), 1, '#56a040'); P1(g, X(c), y - 2, ['#ff6fa8', '#ffd166', '#f4f4f4'][(c + 4) % 3]); } // le jardin
+  if (emb >= 4) VW.push([X(6), Y(0), U(6), U(2)]);                                                            // l'aura : la tête luit la nuit
+  if (w.ivy) ivyOn(g, X(0), Y(H - 8), U(W), U(8 + ped), 7);
+}
+function drawTree(g, x, p, w, VW) { // l'arbre de la connaissance : il grandit branche par branche
+  const s = vs(p) * 1.25, y = vy(p), st = w.stage, emb = w.emb, U = v => Math.round(v * s), r = rng(5);
+  g.fillStyle = 'rgba(30,20,30,.3)'; g.beginPath(); g.ellipse(x, y, (6 + st * 2) * s, 2.5 * s, 0, 0, 7); g.fill();
+  const H = [3, 6, 12, 18, 24, 30, 36, 40, 42, 44][Math.max(0, st - 1)], tw = Math.max(1, U(1 + st * .45));
+  if (st <= 2) { R(g, x, y - U(H), 1, U(H), '#5e9a44'); P1(g, x - 1, y - U(H), '#7cf0c8'); if (st === 2) { P1(g, x + 1, y - U(H) + 1, '#7cf0c8'); P1(g, x - 1, y - U(H) + 2, '#5e9a44'); } return; }
+  R(g, x - Math.floor(tw / 2), y - U(H), tw, U(H), '#6a4a32'); R(g, x - Math.floor(tw / 2), y - U(H), Math.max(1, Math.floor(tw / 3)), U(H), '#8a6442');
+  if (st >= 8) for (const dx of [-1, 1]) for (let i = 0; i < U(7); i++) P1(g, x + dx * (tw / 2 + i), y - Math.floor(i / 3), '#6a4a32'); // les racines
+  if (st >= 4) for (let b = 0; b < Math.min(6, st - 2); b++) { const by = y - U(H * (.45 + b * .09)), dir = b % 2 ? 1 : -1, len = U(4 + st * .9); for (let i = 0; i < len; i++) P1(g, x + dir * (tw / 2 + i), by - Math.floor(i / 2), '#6a4a32'); }
+  if (st >= 5) { const R0 = U(3 + (st - 4) * 3.4), cy = y - U(H) + Math.round(R0 * .4), leaf = st >= 9 ? ['#2e8a72', '#3fb898', '#9ff0d8'] : ['#2e6a4a', '#3e8a5a', '#6ab878'];
+    for (const [dx, dy, k] of [[0, 0, 1], [-.7, .35, .75], [.7, .35, .75], [-.4, -.45, .7], [.45, -.4, .7]]) { g.fillStyle = leaf[0]; g.beginPath(); g.arc(x + dx * R0, cy + dy * R0 + 1, R0 * k, 0, 7); g.fill(); g.fillStyle = leaf[1]; g.beginPath(); g.arc(x + dx * R0 - 1, cy + dy * R0 - 1, R0 * k * .8, 0, 7); g.fill(); }
+    if (st >= 9) for (let i = 0; i < 14; i++) { const a = r() * 6.28, d = r() * R0 * .9, lx = Math.round(x + Math.cos(a) * d), ly = Math.round(cy + Math.sin(a) * d * .8); P1(g, lx, ly, leaf[2]); VW.push([lx, ly, 1, 1]); } // les feuilles lumineuses
+    if (emb >= 1) for (let i = 0; i < 5; i++) { const lx = Math.round(x - R0 * .8 + i * R0 * .4), ly = Math.round(cy + R0 * .6); R(g, lx, ly - 2, 1, 2, '#3a2a2a'); R(g, lx - 1, ly, 2, 2, '#ffb040'); VW.push([lx - 1, ly, 2, 2]); } // les lanternes
+    if (emb >= 2) for (let i = 0; i < 8; i++) { const a = r() * 6.28, d = r() * R0 * .8; R(g, Math.round(x + Math.cos(a) * d), Math.round(cy + Math.sin(a) * d * .8), 2, 2, '#ffd166'); } // les fruits dorés
+    if (emb >= 4) for (let i = 0; i < 8; i++) { const lx = Math.round(x + (r() - .5) * R0 * 2.4), ly = Math.round(cy + (r() - .2) * R0 * 1.6); VW.push([lx, ly, 1, 1]); } // les lucioles
+  }
+  if (emb >= 3) { R(g, x + U(6), y - U(3), U(7), U(1), '#8a6040'); R(g, x + U(6), y - U(2), 1, U(2), '#6a4a32'); R(g, x + U(12), y - U(2), 1, U(2), '#6a4a32'); for (let i = 0; i < U(14); i++) P1(g, x - U(14) + i, y + 1, '#c8b48a'); } // le banc et le sentier
+  if (w.ivy) ivyOn(g, x - U(6), y - U(H), U(12), U(H), 11);
 }
 function drawMonument(g, kind, x, p, st, pal, VW) {
   const s = vs(p), y = vy(p), S1 = v => Math.max(1, Math.round(v * s)), L = (dx, dy, w, h, c) => R(g, x + Math.round(dx * s), y - Math.round(dy * s), S1(w), S1(h), c);
@@ -1778,7 +1869,7 @@ function glowLayer(lights, tod) {
 
 /* ---- La scène vivante ---- */
 const SCENE = {cam: 300, camV: 0, target: null, focus: null, layers: null, key: '', walkers: [], t0: performance.now(), drag: null, rain: []};
-function sceneKey(g) { return timeOfDay() + '|' + weatherOf(g) + '|' + (g ? g.buildDays : 0) + '|' + (g && g.buildToday ? 1 : 0) + '|' + heroChar() + '|' + S.goals.map(x => goalKind(x) + Math.max(goalStage(x), x.best || 0)).join(','); }
+function sceneKey(g) { return timeOfDay() + '|' + weatherOf(g) + '|' + (g ? g.buildDays : 0) + '|' + (g && g.buildToday ? 1 : 0) + '|' + heroChar() + '|' + Object.keys(QUEST_CATS).map(k => { const w = workState(k); return w.stage + '.' + w.emb + (w.ivy ? 'i' : ''); }).join(',') + '|' + S.goals.map(x => goalKind(x) + Math.max(goalStage(x), x.best || 0)).join(','); }
 // Si le héros choisi tient d'habitude un lieu, Roré prend sa place
 const keeperOf = id => { const k = PLACES[id] && PLACES[id].keeper; return k && k === heroChar() ? 'rore' : k; };
 function ensureLayers(g) {
@@ -1934,7 +2025,7 @@ const SUBMENUS = {
   market:   [['add', 'Noter'], ['refund', 'Autres flux'], ['zero', 'Jour zéro'], ['recent', 'Récentes'], ['back', 'Retour']],
   bank:     [['bilan', 'Bilan'], ['cash', 'Trésorerie'], ['cats', 'Catégories'], ['daily', 'Par jour'], ['top', 'Top'], ['back', 'Retour']],
   archives: [['cal', 'Calendrier'], ['list', 'Liste'], ['back', 'Retour']],
-  board:    [['today', 'Du jour'], ['week', 'Semaine'], ['progress', 'Progrès'], ['trophies', 'Trophées'], ['newq', '+ Quête'], ['manage', 'Gérer'], ['back', 'Retour']],
+  board:    [['today', 'Du jour'], ['week', 'Semaine'], ['works', 'Ouvrages'], ['progress', 'Progrès'], ['trophies', 'Trophées'], ['newq', '+ Quête'], ['manage', 'Gérer'], ['back', 'Retour']],
   lab:      [['measures', 'Mesures'], ['newt', '+ Suivi'], ['back', 'Retour']],
   home:     [['hero', 'Héros'], ['char', 'Personnage'], ['look', 'Apparence'], ['skins', 'Tenues'], ['budgets', 'Budgets'], ['cats', 'Catégories'], ['save', 'Sauvegarde'], ['rules', 'Règles'], ['back', 'Retour']],
   belvedere:[['wishes', 'Wish list'], ['newwish', '+ Add'], ['goals', 'Objectifs'], ['forecast', 'Prévisions'], ['tip', 'Un conseil'], ['back', 'Retour']],
@@ -2023,7 +2114,7 @@ function panelHTML(g) {
   if (p === 'market') return s === 'recent' ? recentPanel() : s === 'zero' ? zeroPanel() : s === 'refund' ? refundPanel(g) : addPanel();
   if (p === 'bank') return s === 'cash' ? cashPanel(g) : bankPanel(s || 'bilan');
   if (p === 'archives') return s === 'list' ? listPanel() : calPanel();
-  if (p === 'board') return s === 'week' ? weekPanel() : s === 'trophies' ? trophyPanel(g) : s === 'progress' ? progressPanel(g) : s === 'newq' ? newQuestPanel() : s === 'manage' ? manageQuestsPanel() : todayQuests();
+  if (p === 'board') return s === 'week' ? weekPanel() : s === 'trophies' ? trophyPanel(g) : s === 'progress' ? progressPanel(g) : s === 'works' ? worksPanel() : s === 'newq' ? newQuestPanel() : s === 'manage' ? manageQuestsPanel() : todayQuests();
   if (p === 'lab') return s === 'newt' ? newTrackerPanel() : measuresPanel();
   if (p === 'home') return homePanel(s || 'hero', g);
   if (p === 'belvedere') { if (s === 'wishes' || !s) return wishesPanel(g); if (s === 'newwish') return wishForm(); if (s === 'goals') return goalsPanel(g); if (s === 'forecast') return forecastPanel(g); const nx = buildName(g.buildDays); return `<p>${esc(TIPS[UI.tipIdx % TIPS.length])}</p><p class="dim">La ville en contrebas compte ${g.buildDays} construction${g.buildDays > 1 ? 's' : ''}.${nx ? ` Prochaine : ${esc(nx)}${g.buildToday ? ' (en chantier aujourd\'hui)' : ''}.` : ' Le royaume est achevé.'}</p>`; }
@@ -2179,12 +2270,13 @@ function calPanel() {
   return monthBar(ym) + `<div class="cal">${cells}</div>` + (sel ? `<div class="gold">${dayLabel(UI.selDay)}</div>${sel.length ? `<div class="list">${sel.map(expenseRow).join('')}</div>` : `<p class="dim">${S.checkins[UI.selDay] ? 'Journée sans dépense.' : 'Aucune dépense.'}</p>`}` : '<p class="dim">Touche un jour pour voir ses dépenses.</p>');
 }
 function listPanel() { const ex = S.expenses.filter(e => ymOf(e.date) === UI.viewYM).sort((a, b) => b.date.localeCompare(a.date)); return monthBar(UI.viewYM) + (ex.length ? `<div class="list">${ex.map(expenseRow).join('')}</div>` : '<p class="dim">Aucune dépense ce mois-ci.</p>'); }
+const qchip = h => h.cat && QUEST_CATS[h.cat] ? `<i class="qcat q-${h.cat}">${QUEST_CATS[h.cat].name}</i>` : '';
 function todayQuests() {
   const t = today();
-  return S.habits.length ? `<div class="list">${S.habits.map(h => { const on = habitDone(t, h.id); return `<div class="li"><button class="box ${on ? 'on' : ''}" data-act="habit" data-id="${h.id}" data-date="${t}" aria-label="Accomplir">${on ? '✓' : ''}</button><span class="grow">${esc(h.name)}</span><small class="dim">série ${habitStreak(h.id)}</small><button class="x" data-act="delHabit" data-id="${h.id}" aria-label="Supprimer la quête" title="Supprimer la quête">×</button></div>`; }).join('')}</div><p class="dim">+15 XP par quête, +25 si toutes sont faites. Quêtes › Gérer pour renommer ou supprimer.</p>` : '<p class="dim">Aucune quête. Choisis « Nouvelle quête ».</p>';
+  return S.habits.length ? `<div class="list">${S.habits.map(h => { const on = habitDone(t, h.id); return `<div class="li"><button class="box ${on ? 'on' : ''}" data-act="habit" data-id="${h.id}" data-date="${t}" aria-label="Accomplir">${on ? '✓' : ''}</button><span class="grow">${esc(h.name)} ${qchip(h)}</span><small class="dim">série ${habitStreak(h.id)}</small><button class="x" data-act="delHabit" data-id="${h.id}" aria-label="Supprimer la quête" title="Supprimer la quête">×</button></div>`; }).join('')}</div><p class="dim">+15 XP par quête, +25 si toutes sont faites. Quêtes › Gérer pour renommer ou supprimer.</p>` : '<p class="dim">Aucune quête. Choisis « Nouvelle quête ».</p>';
 }
 function manageQuestsPanel() { // renommer ou supprimer ses quêtes
-  return S.habits.length ? `<p class="dim">Renomme une quête en touchant son nom. Supprimer la retire des listes ; l'XP qu'elle t'a déjà rapportée reste acquise.</p><div class="list">${S.habits.map(h => `<div class="li"><input class="grow" value="${esc(h.name)}" maxlength="50" data-chg="habitName" data-id="${h.id}" aria-label="Nom de la quête"><button class="ffbtn sm red" data-act="delHabit" data-id="${h.id}">Supprimer</button></div>`).join('')}</div>` : '<p class="dim">Aucune quête. Choisis « + Quête » pour en créer une.</p>';
+  return S.habits.length ? `<p class="dim">Renomme une quête en touchant son nom. Supprimer la retire des listes ; l'XP qu'elle t'a déjà rapportée reste acquise.</p><div class="list">${S.habits.map(h => `<div class="li qrow"><input class="grow" value="${esc(h.name)}" maxlength="50" data-chg="habitName" data-id="${h.id}" aria-label="Nom de la quête"><select data-chg="habitCat" data-id="${h.id}" aria-label="Catégorie">${catOptions(h.cat)}</select><button class="ffbtn sm red" data-act="delHabit" data-id="${h.id}">Supprimer</button></div>`).join('')}</div>` : '<p class="dim">Aucune quête. Choisis « + Quête » pour en créer une.</p>';
 }
 function weekPanel() {
   const t = today(), days = Array.from({length: 7}, (_, i) => addDays(t, i - 6));
@@ -2261,7 +2353,18 @@ function lookPanel(g) { // l'apparence : les couleurs, et les accessoires gagné
   const slots = Object.entries(SLOTS).map(([slot, label]) => { const items = Object.entries(ACCS).filter(([, a]) => a.slot === slot); return `<div class="dim">${label}</div><div class="sws">${o(slot, null, '<small>Aucun</small>')}${items.map(([k, a]) => a.lv <= g.level ? o(slot, k, `<small>${esc(a.name)}</small>`) : `<button class="sw lock" disabled><small>Niv. ${a.lv}</small></button>`).join('')}</div>`; }).join('');
   return `<div class="center">${robotImg(heroKey(), heroOutfit(), 72)}${robotImg(heroKey(), heroOutfit(), 72, {dir: 'right'})}</div>${slots}<div class="dim">Visière</div><div class="sws">${colors('eyes', LOOK_EYES)}</div><div class="dim">Cape, écharpe, foulard</div><div class="sws">${colors('cape', LOOK_CAPE)}</div><div class="dim">Corps</div><div class="sws">${colors('body', LOOK_BODY)}</div>`;
 }
-function newQuestPanel() { return `<form data-form="habit"><input name="name" class="full" placeholder="Ex. cuisiner maison" maxlength="50" required><button class="ffbtn">Ajouter la quête</button></form>`; }
+const catOptions = cur => `<option value="">Sans catégorie</option>${Object.entries(QUEST_CATS).map(([k, c]) => `<option value="${k}" ${cur === k ? 'selected' : ''}>${c.name}</option>`).join('')}`;
+function newQuestPanel() { return `<form data-form="habit"><input name="name" class="full" placeholder="Ex. 30 min de course, lire 10 pages" maxlength="50" required><label class="dim">Catégorie</label><select name="cat" class="full">${catOptions('')}</select><p class="dim">Une quête Sport fait grandir la statue du Penseur, une quête Mind l'arbre de la connaissance.</p><button class="ffbtn">Ajouter la quête</button></form>`; }
+function worksPanel() { // les ouvrages des catégories de quêtes
+  return `<p class="dim">Chaque jour où tu accomplis au moins une quête d'une catégorie, son ouvrage avance d'un jour dans la ville en contrebas : ${WORK_DAYS} jours pour l'achever, puis il s'embellit. Délaissé ${IVY_DAYS} jours, il se couvre de lierre ; chaque semaine de plus, il perd une étape.</p>
+    <div class="list">${Object.entries(QUEST_CATS).map(([k, c]) => { const w = workState(k), nq = S.habits.filter(h => h.cat === k).length, done = w.stage >= 10, pct = Math.min(100, w.pts / WORK_DAYS * 100);
+      const next = done ? (w.emb < 4 ? `Encore ${EMB_DAYS - (w.pts - WORK_DAYS) % EMB_DAYS} jours réguliers pour ${c.emb[w.emb]}.` : 'Ouvrage achevé et entièrement embelli.') : `Encore ${STEP_DAYS - w.pts % STEP_DAYS} jour${STEP_DAYS - w.pts % STEP_DAYS > 1 ? 's' : ''} réguliers pour ${c.steps[w.stage]}.`;
+      return `<div class="li col"><div class="row between"><b>${c.icon} ${esc(c.work)}</b><small class="dim">${esc(c.name)} · ${nq} quête${nq > 1 ? 's' : ''}</small></div>
+        <span class="gbar"><i style="width:${pct.toFixed(1)}%"></i><em>${Math.min(w.pts, WORK_DAYS)} / ${WORK_DAYS} jours</em></span>
+        <small>${w.stage ? `Étape ${w.stage}/10 : ${esc(c.steps[w.stage - 1])}${w.emb ? ` · embellie : ${c.emb.slice(0, w.emb).map(esc).join(', ')}` : ''}` : w.pts ? 'Le chantier a commencé.' : 'Pas encore commencé.'}</small>
+        <small class="dim">${nq ? esc(next) : 'Ajoute une quête de cette catégorie (Quêtes › + Quête ou Gérer).'}</small>
+        ${w.ivy ? `<small class="red">${w.idle} jours sans quête ${esc(c.name)} : le lierre gagne l'ouvrage${w.idle >= IVY_DAYS * 2 ? ' et il a perdu des étapes' : `, une étape tombera dans ${IVY_DAYS * 2 - w.idle} jour${IVY_DAYS * 2 - w.idle > 1 ? 's' : ''}`}. Reprends pour le sauver.</small>` : ''}</div>`; }).join('')}</div>`;
+}
 function measuresPanel() {
   const t = today(), d = UI.trackerDate;
   return `<div class="row"><span class="dim">Jour</span><input type="date" value="${d}" max="${t}" data-chg="trackerDate" class="grow"></div>` + (S.trackers.length ? `<div class="list">${S.trackers.map(tr => { const v = S.trackerLog[d] ? S.trackerLog[d][tr.id] : undefined; return `<div class="li col"><div class="row between"><span>${esc(tr.name)} <small class="dim">${esc(tr.unit || '')}${tr.goal !== '' && tr.goal != null ? ` · ${tr.dir === 'max' ? '≤' : '≥'} ${esc(tr.goal)}` : ''}</small></span><button class="x" data-act="delTracker" data-id="${tr.id}" aria-label="Supprimer">×</button></div><canvas class="spark" data-id="${tr.id}" width="71" height="18"></canvas><form data-form="track" data-id="${tr.id}" class="row"><input name="v" type="number" step="any" inputmode="decimal" class="grow" value="${v ?? ''}" placeholder="Valeur"><button class="ffbtn sm">OK</button></form></div>`; }).join('')}</div>` : '<p class="dim">Aucun suivi. Choisis « Nouveau suivi ».</p>');
@@ -2325,7 +2428,7 @@ function chooseMenu(i) {
 function toast(title, msg) { const box = $('#toasts'); while (box.children.length >= 3) box.firstChild.remove(); const el = document.createElement('div'); el.className = 'ff toast'; el.innerHTML = `<b class="gold">${esc(title)}</b><br>${esc(msg)}`; $('#toasts').appendChild(el); setTimeout(() => el.remove(), 3600); }
 function commit(fx) {
   const before = UI.game || computeGame();
-  autoSavings(); goalMilestones(); save(true); if (UI.place === 'belvedere' && UI.dlg && UI.sub !== 'tip') { UI.game = computeGame(); UI.dlg.text = lineOf('belvedere', UI.game); } const g = renderUI();
+  autoSavings(); goalMilestones(); workMilestones(); save(true); if (UI.place === 'belvedere' && UI.dlg && UI.sub !== 'tip') { UI.game = computeGame(); UI.dlg.text = lineOf('belvedere', UI.game); } const g = renderUI();
   if (g.xp > before.xp) { toast('+' + (g.xp - before.xp) + ' XP', fx || 'Bien joué !'); UI.cheerUntil = performance.now() + 1800; }
   progress(g);
 }
@@ -2450,6 +2553,7 @@ document.addEventListener('change', e => {
   const t = e.target, k = t.dataset.chg, c = t.dataset.id && catOf(t.dataset.id);
   if (t.id === 'importFile') { const f = t.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { const d = JSON.parse(r.result); if (!d || !Array.isArray(d.expenses) || !Array.isArray(d.categories)) throw 0; if (!confirm(`Importer ${d.expenses.length} dépenses ? Les données actuelles seront remplacées.`)) return; S = migrate(d); save(true); renderUI(); toast('Import réussi', `${S.expenses.length} dépenses chargées.`); } catch (err) { alert("Ce fichier n'est pas une sauvegarde Budget Quest."); } }; r.readAsText(f); t.value = ''; return; }
   if (k === 'heroName') { S.heroName = t.value.trim().slice(0, 20); commit(); }
+  else if (k === 'habitCat') { const h = S.habits.find(x => x.id === t.dataset.id); if (h) { h.cat = QUEST_CATS[t.value] ? t.value : null; commit(); } }
   else if (k === 'habitName') { const h = S.habits.find(x => x.id === t.dataset.id); if (h && t.value.trim()) { h.name = t.value.trim().slice(0, 50); commit(); } }
   else if (k === 'catName' && c) { if (t.value.trim()) c.name = t.value.trim().slice(0, 24); commit(); }
   else if (k === 'trackerDate') { UI.trackerDate = t.value && t.value <= today() ? t.value : today(); renderUI(); }
@@ -2470,7 +2574,7 @@ document.addEventListener('submit', e => {
   } else if (k === 'edit') {
     const ex = S.expenses.find(x => x.id === f.dataset.id); if (!ex) return; const amount = parseAmt(v('amount')); if (!amount) return;
     Object.assign(ex, {amount, catId: v('catId') || ex.catId, note: v('note').trim(), date: v('date') || ex.date}); closeModal(); commit();
-  } else if (k === 'habit') { S.habits.push({id: uid(), name: v('name').trim().slice(0, 50)}); UI.sub = 'today'; SFX.coin(); commit(); }
+  } else if (k === 'habit') { const nm = v('name').trim().slice(0, 50); S.habits.push({id: uid(), name: nm, cat: QUEST_CATS[v('cat')] ? v('cat') : questCatGuess(nm)}); UI.sub = 'today'; SFX.coin(); commit(); }
   else if (k === 'tracker') { S.trackers.push({id: uid(), name: v('name').trim(), unit: v('unit').trim(), goal: v('goal') === '' ? '' : +v('goal'), dir: v('dir') || 'min'}); UI.sub = 'measures'; SFX.coin(); commit(); }
   else if (k === 'track') { const val = v('v'); if (val === '' || isNaN(+val)) return; const d = UI.trackerDate; S.trackerLog[d] = S.trackerLog[d] || {}; S.trackerLog[d][f.dataset.id] = +val; SFX.coin(); commit('Mesure enregistrée.'); }
   else if (k === 'cat') { const id = uid(), mons = Object.keys(MONS), cols = Object.keys(COLORS); S.categories.push({id, name: v('name').trim(), monster: mons[S.categories.length % mons.length], color: cols[S.categories.length % cols.length], budget: 0}); S.budgets[UI.viewYM] = S.budgets[UI.viewYM] || {}; S.budgets[UI.viewYM][id] = parseAmt(v('budget')); commit(); }
@@ -2620,7 +2724,7 @@ function handCursor() { // la main gantée des menus, dessinée au pixel
 function boot() {
   S = load() || defaultState(); save(false);
   handCursor(); sizeScene();
-  if (autoSavings() | goalMilestones()) save(true);
+  if (autoSavings() | goalMilestones() | workMilestones()) save(true);
   UI.game = computeGame(); UI.dlg = S.onboarded && !S.expenses.length ? idleDlg() : null;
   SCENE.cam = clampCam(0);
   renderUI(); progress(UI.game, true);
@@ -2633,7 +2737,7 @@ function boot() {
   const loop = now => {
     const dt = Math.min(.05, (now - last) / 1000); last = now;
     updateScene(dt, now); drawScene(now);
-    const m = new Date().getMinutes(); if (m !== lastMin) { lastMin = m; if (autoSavings() | goalMilestones()) save(true); renderUI(); }
+    const m = new Date().getMinutes(); if (m !== lastMin) { lastMin = m; if (autoSavings() | goalMilestones() | workMilestones()) save(true); renderUI(); }
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
