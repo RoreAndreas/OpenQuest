@@ -869,7 +869,7 @@ const INCOME_CATS = {salaire: 'Salaire', prime: 'Prime', vente: 'Vente', cadeau:
    son ouvrage dans la ville en contrebas (100 jours pour l'achever, en 10 étapes) ; il s'embellit ensuite. Délaissé 7 jours,
    il se couvre de lierre ; chaque semaine de plus lui fait perdre une étape. ---- */
 const QUEST_CATS = {
-  sport: {name: 'Sport', work: 'La statue du Penseur', icon: '💪', steps: ['les fondations', 'le piédestal', 'le rocher', 'les pieds', 'les jambes', 'le torse', 'le bras qui soutient la tête', 'la tête', 'le marbre poli', 'la statue achevée'], emb: ['la couronne de laurier dorée', 'les flambeaux', 'les cyprès et les fleurs', "l'aura"]},
+  sport: {name: 'Sport', work: 'Le Penseur et son temple', icon: '💪', steps: ['les fondations', 'le piédestal et les marches du temple', 'le rocher et la base des colonnes', 'les jambes et les fûts des colonnes', 'les cuisses et le milieu des colonnes', 'le torse et les chapiteaux', "le bras et l'architrave", 'la tête, la frise et la corniche', 'le marbre poli et le fronton', 'la statue et le toit du temple'], emb: ['la couronne de laurier dorée', 'les flambeaux', 'les cyprès et les fleurs', "l'aura"]},
   mind: {name: 'Mindset', work: "L'arbre de la connaissance", icon: '🧠', steps: ['la graine', 'la pousse', 'le jeune tronc', 'les premières branches', 'les feuilles', 'la ramure', 'la grande canopée', 'les racines profondes', 'les feuilles lumineuses', "l'arbre achevé"], emb: ['les lanternes', 'les fruits dorés', 'le banc et le sentier', 'les lucioles']},
 };
 const WORK_DAYS = 100, STEP_DAYS = 10, EMB_DAYS = 25, IVY_DAYS = 7;
@@ -1500,8 +1500,8 @@ function ambSky(g, L, z, cam, t) { // nuages légers, oiseaux, dirigeable, étoi
   const col = L.tod === 'day' ? 'rgba(255,255,255,.55)' : L.tod === 'evening' ? 'rgba(244,170,170,.45)' : 'rgba(90,96,150,.45)';
   g.fillStyle = col;
   for (let k = 0; k < 4; k++) { const sp = 1.5 + k * .7, len = 26 + k * 9, x = wrap(hash(k) * SW + t * sp, SW + 120) - 60 - so, y = 6 + k * 8 + hash(k + 9) * 6; F(x, y, len, 1); F(x + 6, y - 1, len - 14, 1); F(x + 10, y + 1, len - 6, 1); }
-  if (L.tod !== 'night' && !wet) { // une volée d'oiseaux toutes les 25 secondes
-    const cyc = 25, ph = (t % cyc) / 9, n = Math.floor(t / cyc);
+  if (L.tod !== 'night' && !wet) { // une volée d'oiseaux toutes les 75 secondes
+    const cyc = 75, ph = (t % cyc) / 9, n = Math.floor(t / cyc);
     if (ph < 1) { const x0 = -20 + hash(n + 5) * SW * .5 + ph * (W + 40) - so, y0 = 14 + hash(n) * 22; g.fillStyle = L.tod === 'day' ? '#3a3448' : '#2a1e2e';
       for (let b = 0; b < 3; b++) { const bx = x0 - b * 7, by = y0 + (b % 2) * 4 + Math.sin(t * 2 + b) * 1.5, up = Math.floor(t * 6 + b) % 2; F(bx, by, 1, 1); F(bx - 2, by - (up ? 1 : 0), 2, 1); F(bx + 1, by - (up ? 1 : 0), 2, 1); } }
     const bc = 140, bp = (t % bc) / 70; // le dirigeable d'Ama, de temps en temps
@@ -1564,7 +1564,7 @@ function ambRoofs(g, L, z, cam, t) { // de temps en temps, un oiseau se pose sur
   if (!PERCHES.length || L.tod === 'night' || L.weather === 'rain' || L.weather === 'storm') return;
   const F = (x, y, w, h) => g.fillRect(Math.round((x - cam) * z), Math.round(y * z), Math.max(1, Math.round(w * z)), Math.max(1, Math.round(h * z))), W = g.canvas.width / z;
   const KINDS = [['#8c8a9c', '#6a7488', '#e8a050'], ['#8a6a4a', '#5a4632', '#d8a040'], ['#f4f4f0', '#c8ccd4', '#f0b040']]; // pigeon, moineau, goéland
-  for (let i = 0; i < 3; i++) { const cyc = 34 + i * 17, n = Math.floor((t + i * 11) / cyc), ph = (t + i * 11) % cyc, stay = 10 + hash(n + i) * 8;
+  for (let i = 0; i < 2; i++) { const cyc = 70 + i * 29, n = Math.floor((t + i * 11) / cyc), ph = (t + i * 11) % cyc, stay = 10 + hash(n + i) * 8;
     if (ph > stay + 4) continue;
     const [px, py] = PERCHES[Math.floor(hash(n * 3 + i) * PERCHES.length)], [body, wing, beak] = KINDS[(n + i) % 3], dir = hash(n + 7) < .5 ? 1 : -1;
     let x = px, y = py - 1, fly = false;
@@ -1584,15 +1584,23 @@ function ambCritters(g, L, z, cam, t) { // les animaux des rues : souris, chat, 
     if (ph < .4) return [a + (b - a) * ph / .4, 1, true]; if (ph < .5) return [b, 1, false]; if (ph < .9) return [b - (b - a) * (ph - .5) / .4, -1, true]; return [a, -1, false]; };
   const draw = (x, dir, parts) => { if (x - cam < -16 || x - cam > W + 16) return; for (const [c, dx, dy, w, h] of parts) { g.fillStyle = c; F(dir > 0 ? x + dx : x - dx - w + 1, Y + dy, w, h); } };
   const night = L.tod === 'night';
-  // les souris : elles filent le long des façades, s'arrêtent, repartent
-  for (const [a, b, per, off] of [[120, 200, 9, 0], [640, 720, 11, .5]]) { const [x, dir, mov] = roam(a, b, per, off), st = mov && Math.floor(t * 12) % 2;
-    draw(x, dir, [['#8a8090', 0, -2, 3, 2], ['#8a8090', 3, -2, 1, 1], ['#e0a8b0', 2, -3, 1, 1], ['#e0a8b0', -2, -1, 2, 1], ['#2a2028', 3, -2, 1, 1], ...(st ? [['#6a6070', 1, 0, 1, 1]] : [])]); }
+  // le chat roux et la souris : le chat s'assoit devant le trou de la souris et guette ; elle détale, il la poursuit jusqu'à la porte de la Banque
+  const HOLE = 440, fur = night ? '#8a5a30' : '#d8843a', str = night ? '#5a3a20' : '#a85a20', mouse = (x, dir, run) => draw(x, dir, [['#8a8090', 0, -2, 3, 2], ['#8a8090', 3, -2, 1, 1], ['#e0a8b0', 2, -3, 1, 1], ['#e0a8b0', -2, -1, 2, 1], ['#2a2028', 3, -2, 1, 1], ...(run && Math.floor(t * 14) % 2 ? [['#6a6070', 1, 0, 1, 1]] : [])]);
+  g.fillStyle = '#1a1018'; F(HOLE, Y - 2, 3, 2); F(HOLE + 1, Y - 3, 1, 1);                                 // le trou de la souris
+  { const T = ((t + 7) % 64 + 64) % 64; let x, dir, mode;                                                     // un cycle de 64 secondes
+    if (T < 18) { x = 330 + (HOLE - 16 - 330) * T / 18; dir = 1; mode = 'walk'; }                          // il approche du trou
+    else if (T < 30) { x = HOLE - 16; dir = 1; mode = 'sit'; }                                               // il guette
+    else if (T < 34.5) { x = HOLE - 16 + (548 - HOLE + 16) * (T - 30) / 4.5; dir = 1; mode = 'run'; }       // il bondit
+    else if (T < 42) { x = 548; dir = T > 38 ? -1 : 1; mode = 'sit'; }                                       // bredouille
+    else { x = 548 - (548 - 330) * (T - 42) / 22; dir = -1; mode = 'walk'; }                                 // il repart
+    const run = mode === 'run', leg = mode === 'walk' ? Math.floor(t * 6) % 2 : run ? Math.floor(t * 14) % 2 : 0, wag = Math.floor(t * (mode === 'sit' ? 3 : 2)) % 2, by = run ? 1 : 0;
+    draw(x, dir, mode !== 'sit' ? [[fur, 0, -5 + by, 7, 3], [str, 2, -5 + by, 1, 2], [str, 4, -5 + by, 1, 2], [fur, 6, -8 + by, 4, 3], [fur, 6, -9 + by, 1, 1], [fur, 9, -9 + by, 1, 1], ['#a8e070', 8, -7 + by, 1, 1],
+        ...(run ? [[fur, -3, -5, 3, 1]] : [[fur, -1, -6 - wag, 1, 2], [fur, -2, -8 - wag, 1, 2]]), [fur, leg ? 1 : run ? 0 : 2, -2, 1, 2], [fur, leg ? 5 : run ? 6 : 4, -2, 1, 2]]
+      : [[fur, 1, -6, 5, 5], [str, 2, -5, 1, 3], [fur, 4, -9, 4, 3], [fur, 4, -10, 1, 1], [fur, 7, -10, 1, 1], ['#a8e070', 6, -8, 1, 1], [fur, -1 - wag, -1, 3, 1], [fur, 6, -2, 1, 2]]);
+    if (T >= 30 && T < 34) mouse(HOLE + 3 + (560 - HOLE - 3) * (T - 30) / 4, 1, true);                       // la souris détale vers la porte
+    else if (T > 6 && T < 12 && Math.floor(t * 1.5) % 3) mouse(HOLE + 1, -1, false);                         // elle pointe le museau quand le chat est loin
+  }
   if (L.weather === 'storm') return;
-  // le chat roux : il se promène, s'assoit et fait sa toilette
-  { const [x, dir, mov] = roam(330, 560, 38, .2), leg = mov ? Math.floor(t * 6) % 2 : 0, wag = Math.floor(t * 2) % 2, fur = night ? '#8a5a30' : '#d8843a', str = night ? '#5a3a20' : '#a85a20';
-    draw(x, dir, mov ? [[fur, 0, -5, 7, 3], [str, 2, -5, 1, 2], [str, 4, -5, 1, 2], [fur, 6, -8, 4, 3], [fur, 6, -9, 1, 1], [fur, 9, -9, 1, 1], ['#a8e070', 8, -7, 1, 1], [fur, -1, -6 - wag, 1, 2], [fur, -2, -8 - wag, 1, 2],
-        [fur, leg ? 1 : 2, -2, 1, 2], [fur, leg ? 5 : 4, -2, 1, 2]]
-      : [[fur, 1, -6, 5, 5], [str, 2, -5, 1, 3], [fur, 4, -9, 4, 3], [fur, 4, -10, 1, 1], [fur, 7, -10, 1, 1], ['#a8e070', 6, -8, 1, 1], [fur, -1, -1, 3, 1], [fur, 6, -2, 1, 2]]); }
   // le chien : il trotte, renifle, remue la queue
   { const [x, dir, mov] = roam(600, 880, 30, .6), leg = mov ? Math.floor(t * 8) % 2 : 0, wag = Math.floor(t * 6) % 2, sniff = !mov && Math.floor(t * 3) % 2, fur = night ? '#5a3e2a' : '#8a5a3a', ear = night ? '#3a2818' : '#5a3a22';
     draw(x, dir, [[fur, 0, -6, 8, 3], [fur, 7, sniff ? -7 : -9, 4, 4], [fur, 11, sniff ? -5 : -7, 2, 2], ['#2a1a1a', 12, sniff ? -5 : -7, 1, 1], [ear, 8, sniff ? -7 : -9, 2, 3], ['#1a1214', 9, sniff ? -6 : -8, 1, 1],
@@ -1742,13 +1750,15 @@ function coast(g, gc, pal, tod, VW) { // g : la vallée (floue au loin) ; gc : l
     for (let x = x0; x <= x1; x++) { const top = Math.round(h(x)), rk = cliffAt(x); if (top >= base) continue;
       for (let y = top; y < base; y++) { const dy = y - top, rock = rk > .5 && dy >= 2 || rk > .95;
         P1(g, x, y, rock ? rockAt(x, y, top, !shadeAt(x)) : dy === 0 ? grass : (x * 7 + y * 3) % 9 === 0 ? grassD : mix(grass, grassD, .25)); } } };
-  // les escaliers de marbre, taillés dans la paroi : des volées de marches qui se croisent, du rivage au sommet
-  const ML = tint('#fbf7ef'), MM = tint('#e4ddd0'), MD = tint('#b9b0a2');
-  const flight = (x0, y0, x1, y1) => { const n = y0 - y1, dx = (x1 - x0) / n, dir = Math.sign(x1 - x0), tw = Math.max(2, Math.ceil(Math.abs(dx)) + 1);
-    for (let i = 0; i <= n; i++) { const x = Math.round(x0 + dx * i), y = y0 - i, xs = dir > 0 ? x : x - tw + 1;
-      R(g, xs, y, tw, 1, ML); R(g, xs, y + 1, tw, 1, MD); P1(g, dir > 0 ? xs + tw : xs - 1, y + 1, MD); }        // la marche, sa contremarche, l'ombre
-    for (let i = 0; i <= n; i++) P1(g, Math.round(x0 + dx * i) - dir * 1, y0 - i - 1, MM); };                   // le garde-corps
-  const landing = (x, y, w) => { R(g, x, y, w, 1, ML); R(g, x, y + 1, w, 1, MM); R(g, x, y + 2, w, 1, MD); };
+  // les escaliers de marbre : ils épousent la pente d'herbe, marche par marche ; l'herbe déborde sur leurs bords
+  const ML = tint(mix('#f4efe4', grass, .12)), MM = tint(mix('#d8d0c0', grass, .2)), MD = tint(mix('#aaa292', grassD, .25));
+  const slopeStairs = (x0, x1, h) => { const tw = 3;
+    for (let x = x0; x <= x1; x++) { const xq = x0 + Math.floor((x - x0) / tw) * tw, yq = Math.round(h(xq + 1)), yt = Math.round(h(x)), y0 = Math.min(yq, yt);
+      if (y0 >= base - 1) continue;
+      const first = x === xq, edge = x === x0 || x === x1;
+      P1(g, x, y0, hash(x * 1.7) < .14 || edge ? tuft : first ? ML : mix(ML, MM, .3));                       // la marche
+      for (let y = y0 + 1; y <= Math.max(yt, y0) + 1 && y < base; y++) P1(g, x, y, y === y0 + 1 ? MM : MD);   // la contremarche
+      if (hash(x * 3.3 + 1) < .2) P1(g, x, y0 - 1, tuft); } };                                             // une touffe qui dépasse
   const tree = (x, kind) => { const y0 = Math.round(TOPS[x]); if (kind === 'olive') { R(g, x, y0 - 3, 1, 3, '#5a4a3a'); R(g, x - 2, y0 - 6, 5, 3, tint('#6a8a5a')); R(g, x - 1, y0 - 7, 3, 1, tint('#86a46e')); P1(g, x + 2, y0 - 4, tint('#6a8a5a')); }
     else { R(g, x, y0 - 9, 2, 9, tint('#2e5a34')); R(g, x, y0 - 9, 1, 8, tint('#3e7a44')); P1(g, x, y0 - 10, tint('#2e5a34')); } };
   const TOPS = {};
@@ -1756,17 +1766,16 @@ function coast(g, gc, pal, tod, VW) { // g : la vallée (floue au loin) ; gc : l
   const tx = COAST.temple, tTop = sea - 6, hT = x => x < tx - 8 ? base - (base - tTop) * ss((x - tx + 46) / 38) : x <= tx + 52 ? tTop : tTop + (x - tx - 52) * 1.8;
   for (let x = tx - 46; x <= tx + 62; x++) TOPS[x] = hT(x);
   headland(tx - 46, tx + 62, hT, x => ss((x - tx - 8) / 30), x => x > tx + 52);
-  flight(tx + 50, base - 1, tx + 34, base - 7); landing(tx + 29, base - 7, 6); flight(tx + 30, base - 8, tx + 46, tTop + 1); landing(tx + 44, tTop, 6); // l'escalier du temple
+  slopeStairs(tx - 40, tx - 4, hT); // l'escalier du temple, sur la pente d'herbe
   for (const [ox, k] of [[-30, 'cypress'], [-22, 'olive'], [-14, 'olive'], [-6, 'cypress']]) tree(tx + ox, k);
-  drawTemple(gc, tx, tTop, tint);
   // le cap du Penseur, à droite, tourné vers le temple
   const cx = COAST.cape, cTop = sea, hC = x => x < cx - 2 ? cTop + (cx - 2 - x) * 1.6 : x <= cx + 38 ? cTop : base - (base - cTop) * ss((cx + 72 - x) / 34);
   for (let x = cx - 12; x <= cx + 72; x++) TOPS[x] = hC(x);
   headland(cx - 12, cx + 72, hC, x => ss((cx + 30 - x) / 30), x => x > cx + 20);
-  flight(cx - 6, base - 1, cx + 8, base - 6); landing(cx + 8, base - 6, 5); flight(cx + 12, base - 7, cx, cTop + 1); landing(cx - 3, cTop, 5); // l'escalier du Penseur
+  slopeStairs(cx + 36, cx + 70, hC); // l'escalier du Penseur, sur la pente d'herbe
   for (const [ox, k] of [[44, 'cypress'], [52, 'olive'], [60, 'olive']]) tree(cx + ox, k);
   for (const [ox, oy] of [[-18, 0], [-14, 1]]) { R(g, cx + ox, shore - 1 + oy, 3, 2, cm); P1(g, cx + ox, shore - 1 + oy, cl); } // des rochers dans l'eau
-  const w = workState('sport'); if (w.pts) drawThinker(gc, cx + 3, cTop, w, VW);
+  const w = workState('sport'); if (w.pts) { drawTemple(gc, tx, tTop, tint, w); drawThinker(gc, cx + 3, cTop, w, VW); }
 }
 // Le temple dorique de trois quarts : la façade au fronton à gauche, au soleil ; la colonnade du flanc file à droite
 const TEMPLE = [
@@ -1795,11 +1804,21 @@ const TEMPLE = [
   "LLMILLMILLMILLMILLMILLMCCMDCCMDCCMDCCMDCCMDCCMDCCMDC",
   "LLLLLLLLLLLLLLLLLLLLLLLMMMMMMMMMMMMMMMMMMMMMMMMMMMMM",
   "MMMMMMMMMMMMMMMMMMMMMMMDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
-  "DDDDDDDDDDDDDDDDDDDDDDDKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
-  "...................................................."];
-function drawTemple(g, x, y, tint) { // x : le bord gauche, y : le sol
-  const C = {L: '#f6eedc', M: '#e2d4b6', D: '#baa888', K: '#8a7a64', I: '#6e604e', C: '#968870', T: '#d4c4a4', U: '#b8a888', R: '#a89878'}, top = y - TEMPLE.length;
-  for (let r = 0; r < TEMPLE.length; r++) for (let c = 0; c < TEMPLE[r].length; c++) { const ch = TEMPLE[r][c]; if (ch !== '.') P1(g, x + c, top + r, tint(C[ch])); }
+  "DDDDDDDDDDDDDDDDDDDDDDDKKKKKKKKKKKKKKKKKKKKKKKKKKKKK"];
+const TEMPLE_ROWS = [[3, 23, 25], [3, 22, 22], [4, 18, 21], [5, 14, 17], [6, 10, 13], [7, 8, 9], [8, 6, 7], [9, 0, 5]]; // [étape, de la ligne, à la ligne]
+function drawTemple(g, x, y, tint, w) { // x : le bord gauche, y : le sol ; il se bâtit avec les quêtes de Sport, des marches au toit
+  const C = {L: '#f6eedc', M: '#e2d4b6', D: '#baa888', K: '#8a7a64', I: '#6e604e', C: '#968870', T: '#d4c4a4', U: '#b8a888', R: '#a89878'}, H = TEMPLE.length, top = y - H + 1, st = w.stage, Wt = TEMPLE[0].length;
+  if (st >= 1) { R(g, x - 3, y, Wt + 6, 2, tint('#a89878')); R(g, x - 3, y, Wt + 6, 1, tint('#c4b494')); }    // les fondations, encastrées dans le plateau
+  if (st >= 2) R(g, x - 2, y - 1, Wt + 3, 1, tint('#cfc0a0'));                                                // le soubassement
+  for (let r = 0; r < H; r++) { const band = TEMPLE_ROWS.find(([, a, b]) => r >= a && r <= b), need = r >= 23 ? 2 : band ? band[0] : 99;
+    if (st < need) continue;
+    for (let c = 0; c < Wt; c++) { const ch = TEMPLE[r][c]; if (ch === '.') continue; if ('TUR'.includes(ch) && st < 10) continue; P1(g, x + c, top + r, tint(C[ch])); } }
+  if (st >= 1 && st < 10) { const yt = top + [24, 22, 18, 14, 10, 8, 6, 0, 0][st - 1], xl = x - 2, xr = x + Wt + 1; // l'échafaudage
+    R(g, xl, yt, 1, y - yt, '#a87850'); R(g, xr, yt, 1, y - yt, '#a87850'); for (let yy = yt; yy < y; yy += 4) R(g, xl, yy, xr - xl + 1, 1, '#c8a060'); }
+  if (w.emb >= 1 && st >= 10) { P1(g, x + 11, top - 1, '#ffd166'); P1(g, x + 50, top + 5, '#ffd166'); }      // les acrotères dorés
+  // l'herbe et les pierres tombées au pied des marches : le temple tient au sol
+  for (let c = -3; c < Wt + 3; c++) if (hash(c * 2.3) < .3) P1(g, x + c, y, tint(hash(c) < .5 ? '#7a9a50' : '#5e8a46'));
+  if (st >= 10) for (const [c, k] of [[-5, 0], [Wt + 3, 1]]) { R(g, x + c, y - 1, 2, 1, tint('#d8ccb4')); P1(g, x + c + k, y - 2, tint('#efe6d2')); }
 }
 function drawTree(g, x, p, w, VW) { // l'arbre de la connaissance : il grandit branche par branche
   const s = vs(p) * 1.25, y = vy(p), st = w.stage, emb = w.emb, U = v => Math.round(v * s), r = rng(5);
@@ -2115,7 +2134,7 @@ function drawScene(now) {
   g.save(); g.beginPath(); g.rect(0, (HZ + 20) * z, cv.width, cv.height); g.clip(); g.filter = `blur(${Math.max(.3, z * .14)}px)`; blit(L.valley, PAR.valley); g.restore();
   const [hr, hg, hb] = T.haze;
   let fog = g.createLinearGradient(0, HZ * z, 0, (HZ + 34) * z); fog.addColorStop(0, `rgba(${hr},${hg},${hb},.45)`); fog.addColorStop(1, `rgba(${hr},${hg},${hb},0)`); g.fillStyle = fog; g.fillRect(0, 0, cv.width, cv.height);
-  g.save(); g.globalAlpha = .88; blit(L.valley.crisp, PAR.valley); g.restore();   // le temple et le Penseur, au-dessus de la brume du fond
+  blit(L.valley.crisp, PAR.valley);   // le temple et le Penseur, au-dessus de la brume du fond
   const mist = g.createLinearGradient(0, (STREET - 60) * z, 0, STREET * z); mist.addColorStop(0, `rgba(${hr},${hg},${hb},0)`); mist.addColorStop(1, `rgba(${hr},${hg},${hb},.3)`); g.fillStyle = mist; g.fillRect(0, 0, cv.width, cv.height);
   // la lueur de la ville en contrebas
   { g.save(); g.globalCompositeOperation = 'lighter'; const vx = (VALLEY.cx - cam * PAR.valley) * z, vy = (STREET - 40) * z, gl = g.createRadialGradient(vx, vy, 0, vx, vy, 160 * z); gl.addColorStop(0, `rgba(255,170,100,${L.tod === 'day' ? .04 : .1})`); gl.addColorStop(1, 'rgba(255,170,100,0)'); g.fillStyle = gl; g.fillRect(0, 0, cv.width, cv.height); g.restore(); }
