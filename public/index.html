@@ -63,7 +63,7 @@ body.wish .wishbtn{border-color:var(--gold)}
 .fbar:hover i,.fbar.on i{filter:brightness(1.2)}
 .fbar.on{background:rgba(255,255,255,.07);border-radius:3px}
 .ftop{position:absolute;left:-6px;right:-6px;text-align:center;font-family:var(--vt);font-weight:normal;font-size:14px;color:#e4e4f0;white-space:nowrap;pointer-events:none}
-.fbar em,.flegend em{position:absolute;left:50%;width:7px;height:7px;margin-left:-3.5px;border-radius:50%;background:#ff6fa8}
+.fbar em,.flegend em{position:absolute;left:50%;width:7px;height:7px;margin-left:-3.5px;border-radius:50%;background:#ffffff}
 .fbar span{position:absolute;left:0;right:0;bottom:-15px;text-align:center;font-size:14px;color:var(--dim)}
 .fbar.on span{color:#fff}
 .flegend{display:flex;flex-wrap:wrap;gap:2px 12px;font-size:16px;color:var(--dim);margin:4px 0}
@@ -75,6 +75,7 @@ body.wish .wishbtn{border-color:var(--gold)}
 .fstats small{font-size:15px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fstats b{font-family:var(--px);font-size:9px;font-weight:normal;margin-top:3px;white-space:nowrap}
 .ftip{font-size:17px;margin:0 0 6px;min-height:1.1em;color:var(--dim)}.ftip b{color:#fff;font-weight:normal}
+.ftable{display:grid;grid-template-columns:1.2fr repeat(4,1fr);gap:2px 6px;font-size:16px;margin:4px 0}.ftable span{text-align:right;white-space:nowrap}.ftable span:nth-child(5n+1){text-align:left}.ftable .h{color:var(--dim);font-size:14px}
 .fdetail summary{cursor:pointer;color:var(--gold);margin:6px 0}
 .kv.fc{grid-template-columns:1fr auto;font-size:18px}
 .cfgbtn svg{transition:transform .3s;image-rendering:pixelated}
@@ -926,7 +927,7 @@ function migrate(s) {
   const okDate = d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d), amt = v => Math.max(0, Math.round(+v || 0));
   s.wishes = s.wishes.filter(w => w && typeof w.name === 'string' && /^\d{4}-\d{2}$/.test(w.month)).map(w => ({...w, price: amt(w.price), bought: w.bought && okDate(w.bought.date) ? {...w.bought, amount: amt(w.bought.amount)} : null}));
   s.goals = s.goals.filter(x => x && x.id && typeof x.name === 'string').map(x => ({...x, target: amt(x.target), plan: x.plan && typeof x.plan === 'object' ? x.plan : {}, start: /^\d{4}-\d{2}$/.test(x.start) ? x.start : ymOf(today())}));
-  s.flows = s.flows.filter(x => x && okDate(x.date) && ['gift', 'save', 'withdraw', 'spend', 'goalspend'].includes(x.kind)).map(x => ({...x, amount: amt(x.amount)}));
+  s.flows = s.flows.filter(x => x && okDate(x.date) && ['gift', 'save', 'withdraw', 'spend', 'goalspend', 'alloc', 'unalloc'].includes(x.kind)).map(x => ({...x, amount: amt(x.amount)}));
   s.incomes.forEach(e => { if (!INCOME_CATS[e.cat]) e.cat = 'autre'; });
   s.refunds = s.refunds.filter(r => r && okDate(r.date) && ['owed', 'owe'].includes(r.dir)).map(r => ({...r, addCash: !!r.addCash, amount: amt(r.amount), how: r.how === 'cash' ? 'cash' : 'paid', pays: (Array.isArray(r.pays) ? r.pays : []).filter(x => x && okDate(x.date)).map(x => ({...x, amount: amt(x.amount)}))}));
   s.incomes = s.incomes.filter(e => e && typeof e.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(e.date)).map(e => ({...e, amount: Math.max(0, Math.round(+e.amount || 0))}));
@@ -972,7 +973,7 @@ async function syncPull() {
     const {etat} = await r.json(), remote = etat ? migrate(JSON.parse(etat)) : null;
     if (remote && (remote.savedAt || 0) > (S.savedAt || 0)) { // la copie en ligne est plus récente : on la reprend
       const fresh = !S.onboarded;
-      S = remote; save(false); SYNC.last = Date.now(); if (autoGoals() | goalMilestones()) save(true);
+      S = remote; save(false); SYNC.last = Date.now(); if (autoSavings() | goalMilestones()) save(true);
       SCENE.key = ''; SCENE.walkers = [];
       if (fresh || !$('#modal').hidden) closeModal();
       UI.dlg = null; renderUI(); progress(UI.game, true);
@@ -985,13 +986,46 @@ async function syncPull() {
 
 
 /* ---------------- CALCULS ---------------- */
-/* ---- Les objectifs d'épargne : chacun a sa cible, son échéance et son versement mensuel prévu.
-   Le versement est mis de côté tout seul au début de chaque mois (un flux « mis de côté » vers l'objectif). ---- */
+/* ---- L'épargne : une épargne libre (10 % de chaque salaire, 40 % de la trésorerie de fin de mois au-delà de 100 000 F,
+   ce que tu mets de côté) que tu affectes toi-même à tes objectifs (Urgence, Logement, Mariage…). ---- */
 const goalOf = id => S.goals.find(x => x.id === id);
-function goalPlan(goal, ym) { let best = null; for (const k in goal.plan) if (k <= ym && (best === null || k > best)) best = k; return best ? +goal.plan[best] || 0 : 0; }
-function goalBal(goal) { let b = 0; for (const x of S.flows) if (x.goalId === goal.id) b += x.kind === 'save' ? x.amount : -x.amount; return b; }
-// Ce qui a été versé dans l'objectif (versements − retraits) : les dépenses payées par l'objectif n'effacent pas l'effort
-function goalSaved(goal) { let b = 0; for (const x of S.flows) if (x.goalId === goal.id) b += x.kind === 'save' ? x.amount : x.kind === 'withdraw' ? -x.amount : 0; return b; }
+const SAVE_FROM = '2026-11-01', SALARY_CUT = .1, SWEEP_MIN = 100000, SWEEP_RATE = .4;
+// Ce qu'un objectif contient : versé + affecté − retiré − ce qu'il a payé
+function goalBal(goal) { let b = 0; for (const x of S.flows) if (x.goalId === goal.id) b += x.kind === 'save' || x.kind === 'alloc' ? x.amount : -x.amount; return b; }
+// Ce qui a été mis dans l'objectif (versé + affecté − retiré) : les dépenses payées par l'objectif n'effacent pas l'effort
+function goalSaved(goal) { let b = 0; for (const x of S.flows) if (x.goalId === goal.id) b += x.kind === 'save' || x.kind === 'alloc' ? x.amount : x.kind === 'withdraw' || x.kind === 'unalloc' ? -x.amount : 0; return b; }
+const monthsTo = due => { const [a, b] = ymOf(today()).split('-').map(Number), [c, d] = due.split('-').map(Number); return (c - a) * 12 + (d - b) + 1; }; // mois restants, celui-ci compris
+// L'épargne libre, pas encore affectée à un objectif
+function freeBal() { let b = 0; for (const x of S.flows) { if (x.goalId) { if (x.kind === 'alloc') b -= x.amount; else if (x.kind === 'unalloc') b += x.amount; continue; } if (x.kind === 'save') b += x.amount; else if (x.kind === 'withdraw') b -= x.amount; } return b; }
+// Le rythme d'un objectif : ce qui y a été mis en moyenne par mois sur les trois derniers mois (le mois en cours compris)
+function goalRhythm(goal) { // divisé par le nombre de mois écoulés depuis le premier apport (3 au plus)
+  const now = ymOf(today()), from = addMonths(now, -2); let b = 0, first = null;
+  for (const x of S.flows) if (x.goalId === goal.id && ymOf(x.date) >= from) { b += x.kind === 'save' || x.kind === 'alloc' ? x.amount : x.kind === 'withdraw' || x.kind === 'unalloc' ? -x.amount : 0; if (!first || ymOf(x.date) < first) first = ymOf(x.date); }
+  if (!first) return 0; const months = Math.min(3, monthsTo(now) - monthsTo(first) + 1 || 1); return Math.max(0, Math.round(b / Math.max(1, months)));
+}
+// La trésorerie à la fin d'un jour donné (même calcul que la trésorerie du jour, limité aux mouvements jusqu'à cette date)
+function cashAt(date) {
+  if (S.startCash == null) return null; const sd = S.startDate || S.createdAt || today(); let c = S.startCash;
+  for (const e of S.incomes) if (e.date >= sd && e.date <= date) c += e.amount;
+  for (const e of S.expenses) if (e.date >= sd && e.date <= date) c -= e.amount;
+  for (const r of S.refunds) { const owed = r.dir === 'owed'; if (r.addCash && r.date >= sd && r.date <= date) c += owed ? -r.amount : r.how === 'cash' ? r.amount : 0; for (const x of r.pays) if (x.date >= sd && x.date <= date) c += owed ? x.amount : -x.amount; }
+  for (const x of S.flows) { if (x.date < sd || x.date > date || x.kind === 'goalspend' || x.kind === 'alloc' || x.kind === 'unalloc') continue; c += x.kind === 'withdraw' ? x.amount : -x.amount; }
+  return c;
+}
+const lastDay = ym => `${ym}-${pad(dim(ym))}`;
+function autoSavings() { // l'épargne automatique : 10 % de chaque salaire, et 40 % de la trésorerie de fin de mois si elle dépasse 100 000 F
+  let n = 0;
+  for (const e of S.incomes) if (e.cat === 'salaire' && e.date >= SAVE_FROM && !S.flows.some(x => x.incomeId === e.id)) { S.flows.push({id: uid(), kind: 'save', amount: Math.round(e.amount * SALARY_CUT), date: e.date, incomeId: e.id, note: '10 % du salaire'}); n++; }
+  for (const x of [...S.flows]) if (x.incomeId && !S.incomes.some(e => e.id === x.incomeId)) { S.flows = S.flows.filter(y => y !== x); n++; } // salaire supprimé : son prélèvement aussi
+  if (S.startCash != null) for (let ym = ymOf(SAVE_FROM < (S.startDate || '') ? S.startDate : SAVE_FROM); ym < ymOf(today()); ym = addMonths(ym, 1)) {
+    if (S.flows.some(x => x.sweep === ym)) continue;
+    const c = cashAt(lastDay(ym)); if (c == null) break;
+    if (c >= SWEEP_MIN) { S.flows.push({id: uid(), kind: 'save', amount: Math.round(c * SWEEP_RATE), date: lastDay(ym), sweep: ym, note: 'Épargne de fin de mois (40 %)'}); }
+    else S.flows.push({id: uid(), kind: 'save', amount: 0, date: lastDay(ym), sweep: ym, note: 'Fin de mois sous 100 000 F : tout reste en trésorerie'});
+    n++;
+  }
+  return n;
+}
 const STAGE_NAMES = ['', 'les fondations', 'les murs', 'le toit', 'la touche finale'];
 function goalMilestones() { // un palier franchi (25, 50, 75, 100 %) : le monument grandit, la cité fait la fête
   let hit = null;
@@ -1003,25 +1037,6 @@ function goalMilestones() { // un palier franchi (25, 50, 75, 100 %) : le monume
   UI.dlg = {who: 'MERLAIN', face: robotFace('mage_du_code', TEAM.mage_du_code.outfit, 40), text: st === 4 ? `Objectif ${x.name} atteint ! ${fmt(x.target)} de côté. Regarde la vallée : le monument est achevé, la cité fait la fête !` : `Objectif ${x.name} : ${pct} % ! Dans la vallée, ${STAGE_NAMES[st]} sortent de terre. +100 XP.`};
   toast(`Objectif ${x.name} : ${pct} %`, st === 4 ? 'Objectif atteint ! +100 XP et une nouvelle tenue.' : `+100 XP · le monument gagne ${STAGE_NAMES[st]}.`);
   return true;
-}
-const goalDoneIn = (goal, ym) => S.flows.reduce((a, x) => a + (x.goalId === goal.id && x.auto === ym ? x.amount : 0), 0);
-// Ce que la trésorerie peut donner sans passer sous zéro, en gardant de quoi finir le budget du mois
-function goalRoom() { const g = computeGame(); if (g.cash == null) return Infinity; const ms = g.ms; return Math.max(0, g.cash - Math.max(0, ms.budget - ms.spent)); }
-function autoGoals() { // les versements automatiques : ce que la trésorerie permet, complétés dès qu'un encaissement arrive
-  if (!S.goals.length) return 0;
-  const now = ymOf(today()); let n = 0, room = goalRoom();
-  for (const goal of S.goals) for (let ym = goal.start; ym <= now && room > 0; ym = addMonths(ym, 1)) {
-    const due = Math.min(goalPlan(goal, ym), Math.max(0, goal.target - goalSaved(goal) + goalDoneIn(goal, ym))), give = Math.min(due - goalDoneIn(goal, ym), room);
-    if (give <= 0) continue;
-    S.flows.push({id: uid(), kind: 'save', goalId: goal.id, amount: give, date: today() < (goal.created || '') ? goal.created : today(), auto: ym, note: 'Versement automatique'}); room -= give; n++;
-  }
-  return n;
-}
-// Ce que les objectifs prélèveront dans les mois à venir (pour les prévisions)
-function goalOutflows(months) {
-  const bal = Object.fromEntries(S.goals.map(x => [x.id, goalBal(x)])), now = ymOf(today());
-  for (const x of S.goals) bal[x.id] = goalSaved(x);
-  return months.map(ym => { if (ym < now) return 0; let out = 0; for (const x of S.goals) { if (ym < x.start) continue; const left = ym === now ? Math.max(0, goalPlan(x, ym) - goalDoneIn(x, ym)) : goalPlan(x, ym), v = Math.min(left, Math.max(0, x.target - bal[x.id])); bal[x.id] += v; out += v; } return out; }); // le mois en cours : ce qu'il reste à verser
 }
 function getBudget(ym, cat) {
   let best = null;
@@ -1038,19 +1053,22 @@ function expectedIncome(ym) { // le revenu prévu d'un mois : celui que tu as r�
   const tot = S.incomes.filter(e => e.cat !== 'cadeau' && !e.wishId && months.includes(ymOf(e.date))).reduce((a, e) => a + e.amount, 0);
   return Math.round(tot / 3);
 }
-// La trésorerie mois par mois sur un an : + revenu prévu, − budgets (ou les envies, si elles dépassent leur budget)
+// La trésorerie et l'épargne mois par mois sur un an. Sorties = budgets + Wish list. Chaque salaire prévu envoie 10 % à
+// l'épargne ; à la fin de chaque mois, 40 % de la trésorerie part en épargne si elle atteint 100 000 F.
 function forecast(g) {
-  const ym0 = ymOf(today()), rows = []; let bal = g.netCash == null ? 0 : g.netCash;
-  const gOut = goalOutflows(Array.from({length: 12}, (_, k) => addMonths(ym0, k))); let sav = S.goals.reduce((a, x) => a + goalBal(x), 0);
+  const ym0 = ymOf(today()), rows = []; let bal = g.netCash == null ? 0 : g.netCash, free = freeBal();
+  const gb = Object.fromEntries(S.goals.map(x => [x.id, goalBal(x)]));
   for (let k = 0; k < 12; k++) {
-    const ym = addMonths(ym0, k), ms = monthStats(ym), inc = expectedIncome(ym); let out = gOut[k];
+    const ym = addMonths(ym0, k), ms = monthStats(ym), inc = expectedIncome(ym); let out = 0;
     for (const c of ms.cats) out += k === 0 ? Math.max(c.budget - c.spent, c.reserved, 0) : Math.max(c.budget, c.reserved);
     const got = k === 0 ? S.incomes.filter(e => ymOf(e.date) === ym && !e.wishId && e.cat !== 'cadeau').reduce((a, e) => a + e.amount, 0) : 0, mw = S.wishes.filter(w => !w.bought && w.month === ym);
-    const income = (k === 0 ? Math.max(0, inc - got) : inc) + mw.filter(w => w.catId === WISH_IN).reduce((a, w) => a + w.price, 0);
+    const salary = k === 0 ? Math.max(0, inc - got) : inc, income = salary + mw.filter(w => w.catId === WISH_IN).reduce((a, w) => a + w.price, 0);
     out += mw.filter(w => w.catId === WISH_OUT).reduce((a, w) => a + w.price, 0); // les décaissements hors budget de la Wish list
-    bal += income - out;
-    sav += gOut[k] - mw.filter(w => wishGoal(w)).reduce((a, w) => a + w.price, 0); // l'épargne des objectifs : + versements − ce qu'ils paient
-    rows.push({ym, income, out, saved: gOut[k], sav, bal, wishes: S.wishes.filter(w => !w.bought && w.month === ym), over: ms.cats.filter(c => c.reserved > c.budget)});
+    const cut = Math.round(salary * SALARY_CUT); bal += income - out - cut; free += cut;
+    for (const w of mw.filter(w => wishGoal(w))) { const gl = wishGoal(w); let need = w.price; const fromGoal = Math.min(need, Math.max(0, gb[gl.id])); gb[gl.id] -= fromGoal; need -= fromGoal; const fromFree = Math.min(need, Math.max(0, free)); free -= fromFree; bal -= need - fromFree; } // payé par l'objectif, puis l'épargne libre, puis la trésorerie
+    const sweep = bal >= SWEEP_MIN ? Math.round(bal * SWEEP_RATE) : 0; bal -= sweep; free += sweep;
+    const goals = {...gb}, sav = free + Object.values(gb).reduce((a, v) => a + v, 0);
+    rows.push({ym, income, out, cut, sweep, bal, free, goals, sav, wishes: mw, over: ms.cats.filter(c => c.reserved > c.budget)});
   }
   return rows;
 }
@@ -1214,7 +1232,7 @@ function computeGame() {
   const refundNet = loansIn - advancesOut + repaidIn - repaidOut, pendingNet = owedOpen - oweOpen;
   // les autres flux : dons faits et argent mis de côté sortent de la trésorerie, les retraits d'épargne y reviennent
   let gifts = 0, saved = 0, withdrawn = 0, savingsBal = 0;
-  for (const x of S.flows) { const k = x.kind; if (k === 'save') savingsBal += x.amount; if (k === 'withdraw' || k === 'goalspend') savingsBal -= x.amount; if (x.date < sd || k === 'goalspend') continue; if (k === 'gift' || k === 'spend') gifts += x.amount; else if (k === 'save') saved += x.amount; else withdrawn += x.amount; }
+  for (const x of S.flows) { const k = x.kind; if (k === 'alloc' || k === 'unalloc') continue; if (k === 'save') savingsBal += x.amount; if (k === 'withdraw' || k === 'goalspend') savingsBal -= x.amount; if (x.date < sd || k === 'goalspend') continue; if (k === 'gift' || k === 'spend') gifts += x.amount; else if (k === 'save') saved += x.amount; else withdrawn += x.amount; }
   const flowNet = withdrawn - gifts - saved;
   const cash = S.startCash == null ? null : S.startCash + inc - out + refundNet + flowNet, netCash = cash == null ? null : cash + pendingNet;
   const o = byDate.get(t), todaySum = o ? o.sum : 0, checkedToday = byDate.has(t) || !!S.checkins[t];
@@ -2024,35 +2042,34 @@ function wishRow(w) {
     ${gl ? `<small class="${goalBal(gl) >= w.price ? 'green' : 'dim'}">Objectif ${esc(gl.name)} : ${fmt(goalBal(gl))} de côté sur ${fmt(w.price)}.</small>` : off ? `<small class="dim">Hors budget : compté seulement dans les prévisions.</small>` : over ? `<small class="red">Dépasse le budget ${esc(c.cat.name)} de ${esc(ymLabel(w.month))} (${fmt(c.budget)}) de ${fmt(over)}.</small>` : c ? `<small class="green">Réservé dans le budget ${esc(c.cat.name)} (${fmt(c.budget)}).</small>` : ''}
     <div class="row">${over ? `<button class="ffbtn sm" data-act="fitWish" data-id="${w.id}" title="Monter le budget de ce mois juste assez">Ajuster</button>` : ''}<button class="ffbtn sm" data-act="buyWish" data-id="${w.id}">${inc ? 'Reçu' : off ? 'Payé' : 'Acheté'}</button><button class="x" data-act="delWish" data-id="${w.id}" aria-label="Supprimer">×</button></div></div>`;
 }
-function goalETA(goal) { // le mois où l'objectif sera atteint, au rythme des versements prévus
-  let b = goalSaved(goal), ym = ymOf(today()); if (b >= goal.target) return 'atteint';
-  b += Math.max(0, goalPlan(goal, ym) - goalDoneIn(goal, ym));
-  for (let k = 1; k <= 120; k++) { ym = addMonths(ym, 1); if (ym < goal.start) continue; b += goalPlan(goal, ym); if (b >= goal.target) return ym; }
-  return null;
+function goalETA(goal) { // le mois où l'objectif sera atteint, au rythme des trois derniers mois
+  const left = goal.target - goalSaved(goal); if (left <= 0) return 'atteint';
+  const r = goalRhythm(goal); if (!r) return null;
+  return addMonths(ymOf(today()), Math.ceil(left / r));
 }
 function goalCard(x) {
-  const b = goalBal(x), sv = goalSaved(x), pct = x.target ? Math.min(100, sv / x.target * 100) : 0, eta = goalETA(x), now = ymOf(today()), due = now >= x.start ? goalPlan(x, now) : 0, done = goalDoneIn(x, now), next = goalPlan(x, now >= x.start ? addMonths(now, 1) : x.start), late = eta && eta !== 'atteint' && x.due && eta > x.due;
+  const b = goalBal(x), sv = goalSaved(x), pct = x.target ? Math.min(100, sv / x.target * 100) : 0, eta = goalETA(x), r = goalRhythm(x), left = Math.max(0, x.target - sv);
+  const n = x.due ? monthsTo(x.due) : 0, need = n > 0 ? Math.ceil(left / n / 1000) * 1000 : left, late = eta && eta !== 'atteint' && x.due && eta > x.due;
   return `<div class="li col goal"><div class="row between"><b>◆ ${esc(x.name)}</b><span><b class="gold">${fmt(sv)}</b> <small class="dim">/ ${fmt(x.target)}</small></span></div>
     <span class="gbar"><i style="width:${pct.toFixed(1)}%"></i><em>${Math.round(pct)} %</em></span>
-    ${b !== sv ? `<small class="dim">Disponible dans l'objectif : ${fmt(b)} (le reste a déjà servi)</small>` : ''}${due ? `<small class="${done >= due ? 'green' : 'dim'}">Ce mois-ci : ${fmt(done)} / ${fmt(due)} versés${done < due ? ' · le reste sera versé dès que la trésorerie le permet' : ' ✓'}</small>` : ''}
-    <small class="dim">${x.due ? `Échéance ${esc(ymLabel(x.due))} · ` : ''}Mois prochain : ${fmt(next)}${eta === 'atteint' ? ' · <span class="green">objectif atteint</span>' : eta ? ` · atteint en ${esc(ymLabel(eta))}` : ' · pas de versement prévu'}</small>
-    ${late ? `<small class="red">À ce rythme, l'objectif arrive après l'échéance : augmente le versement ou repousse la date.</small>` : ''}
-    <div class="row"><button class="ffbtn sm" data-act="goalMove" data-id="${x.id}" data-k="save">Verser</button><button class="ffbtn sm" data-act="goalMove" data-id="${x.id}" data-k="withdraw">Retirer</button><button class="ffbtn sm" data-act="goalEdit" data-id="${x.id}">Modifier</button><button class="x" data-act="goalDel" data-id="${x.id}" aria-label="Supprimer">×</button></div></div>`;
+    ${b !== sv ? `<small class="dim">Disponible dans l'objectif : ${fmt(b)} (le reste a déjà servi)</small>` : ''}
+    ${left <= 0 ? '<small class="green">Objectif atteint ✓</small>' : x.due ? (n > 0 ? `<small>Il te faut épargner <b class="gold">${fmt(need)} par mois</b> pour l'atteindre fin ${esc(ymLabel(x.due))}.</small>` : `<small class="red">L'échéance (${esc(ymLabel(x.due))}) est passée : il manque ${fmt(left)}.</small>`) : `<small class="dim">Ajoute une échéance pour savoir combien épargner par mois.</small>`}
+    ${left > 0 ? `<small class="${late ? 'red' : 'dim'}">${r ? `À ton rythme (${fmt(r)} par mois sur 3 mois), atteint en ${esc(ymLabel(eta))}${late ? ' : après l\'échéance' : ''}.` : 'Pas encore de rythme : affecte de l\'épargne pour estimer la date d\'arrivée.'}</small>` : ''}
+    <div class="row"><button class="ffbtn sm" data-act="goalMove" data-id="${x.id}" data-k="alloc">Affecter</button><button class="ffbtn sm" data-act="goalMove" data-id="${x.id}" data-k="unalloc">Retirer</button><button class="ffbtn sm" data-act="goalEdit" data-id="${x.id}">Modifier</button><button class="x" data-act="goalDel" data-id="${x.id}" aria-label="Supprimer">×</button></div></div>`;
 }
 function goalsPanel(g) {
-  const tot = S.goals.reduce((a, x) => a + goalBal(x), 0);
-  return `<div class="row between wrap"><span class="gold">OBJECTIFS D'ÉPARGNE</span><b>${fmt(tot)}</b></div>
-    <p class="dim">Chaque mois, le versement prévu est pris sur la trésorerie disponible, tout seul : ce qui manque est complété dès qu'un encaissement arrive. La trésorerie garde toujours de quoi finir le budget du mois.</p>
+  const free = freeBal(), tot = free + S.goals.reduce((a, x) => a + goalBal(x), 0);
+  return `<div class="row between wrap"><span class="gold">ÉPARGNE</span><b>${fmt(tot)}</b></div>
+    <div class="kv"><span>Épargne libre (à affecter)</span><b class="gold">${fmt(free)}</b>${S.goals.map(x => `<span>◆ ${esc(x.name)}</span><b>${fmt(goalBal(x))}</b>`).join('')}</div>
+    <p class="dim">L'épargne se remplit toute seule : 10 % de chaque salaire, et 40 % de la trésorerie de fin de mois quand elle atteint 100 000 F (le reste reste en trésorerie). Tu l'affectes ensuite toi-même à tes objectifs.</p>
     ${S.goals.length ? `<div class="list">${S.goals.map(goalCard).join('')}</div>` : '<p class="dim">Aucun objectif. Crée-en un ci-dessous.</p>'}
     <button class="ffbtn full" data-act="goalEdit">+ Nouvel objectif</button>`;
 }
 function goalForm(x) {
-  const now = ymOf(today()), m = x ? (goalPlan(x, now) || goalPlan(x, x.start)) : '';
   return `<form data-form="goal" ${x ? `data-id="${x.id}"` : ''} autocomplete="off"><div class="gold">${x ? 'MODIFIER L\'OBJECTIF' : 'NOUVEL OBJECTIF'}</div>
     <input name="name" class="full" placeholder="Nom (Urgence, Logement, Mariage…)" maxlength="30" required value="${x ? esc(x.name) : ''}">
     <label class="dim">Cible</label><div class="row"><input class="amount" name="target" inputmode="numeric" placeholder="0" value="${x ? num(x.target) : ''}"><span class="gold">F</span></div>
-    <label class="dim">Versement automatique par mois${x ? ', à partir de ce mois' : ''}</label><div class="row"><input class="amount" name="monthly" inputmode="numeric" placeholder="0" value="${m ? num(m) : ''}"><span class="gold">F</span></div>
-    <label class="dim">Échéance (facultatif)</label><input type="month" name="due" class="full" value="${x && x.due ? x.due : ''}">
+    <label class="dim">Échéance</label><input type="month" name="due" class="full" value="${x && x.due ? x.due : ''}" ${x ? '' : 'required'}>
     <div class="row"><button class="ffbtn grow">${x ? 'Enregistrer' : 'Créer'}</button><button type="button" class="ffbtn" data-act="closeModal">Annuler</button></div></form>`;
 }
 function wishesPanel(g) {
@@ -2075,21 +2092,24 @@ function wishForm(w) {
 }
 // Les prévisions : trois chiffres, une petite courbe, et le détail mois par mois si on le veut
 const monthShort = ym => { const n = ymLabel(ym).split(' ')[0]; return (n.length > 4 ? n.slice(0, 4) + '.' : n) + ' ' + ym.slice(2, 4); };
-function forecastPanel(g) { // les prévisions : chaque mois, ton argent en fin de mois = trésorerie disponible + épargne des objectifs, empilées
+const GOAL_COLORS = ['#ffd166', '#ff8fb1', '#c58bff', '#ffb070', '#7cf0ff'];
+const goalColor = x => GOAL_COLORS[S.goals.indexOf(x) % GOAL_COLORS.length];
+function forecastPanel(g) { // les prévisions : chaque mois, ton argent en fin de mois = trésorerie + épargne libre + épargne de chaque objectif, empilées
   const N = matchMedia('(max-width:640px)').matches ? 6 : 12, f = forecast(g).slice(0, N), inc = expectedIncome(), start = g.netCash == null ? 0 : g.netCash, low = f.reduce((a, r) => r.bal < a.bal ? r : a, f[0]), end = f[f.length - 1];
-  const hasSav = S.goals.length > 0, top = r => Math.max(0, r.bal) + (hasSav ? Math.max(0, r.sav) : 0);
+  const hasSav = f.some(r => r.sav > 0) || g.savingsBal > 0, segs = r => [['cash', Math.max(0, r.bal), '#7fd8b0'], ['free', Math.max(0, r.free), '#9fb4ff'], ...S.goals.map(x => ['g', Math.max(0, r.goals[x.id] || 0), goalColor(x)])].filter(x => x[1] > 0);
+  const top = r => segs(r).reduce((a, x) => a + x[1], 0);
   const lo = Math.min(0, ...f.map(r => r.bal)), hi = Math.max(1, ...f.map(top)), span = hi - lo, zero = hi / span * 100, pc = v => v / span * 100;
   const ini = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
-  const bars = f.map((r, k) => { const neg = r.bal < 0, tb = Math.abs(r.bal), sv = hasSav ? Math.max(0, r.sav) : 0, base = 100 - zero;
-    const cash = tb ? `<i class="${neg ? 'neg' : 'cash'}" style="${neg ? `top:${zero}%` : `bottom:${base}%`};height:${Math.max(1.5, pc(tb)).toFixed(1)}%"></i>` : '';
-    const savB = sv ? `<i class="sav" style="bottom:calc(${(base + (neg ? 0 : pc(tb))).toFixed(1)}% + ${neg || !tb ? 0 : 2}px);height:${Math.max(1.5, pc(sv)).toFixed(1)}%"></i>` : '';
-    const topAt = base + (neg ? 0 : pc(tb)) + pc(sv);
-    return `<button class="fbar" data-k="${k}" aria-label="${esc(ymLabel(r.ym))} : trésorerie ${fmt(r.bal)}${hasSav ? `, épargne ${fmt(r.sav)}` : ''}">${cash}${savB}<b class="ftop" style="bottom:calc(${topAt.toFixed(1)}% + 3px)">${kfmt(Math.max(0, r.bal) + sv)}</b>${r.wishes.length ? `<em style="bottom:calc(${topAt.toFixed(1)}% + 15px)"></em>` : ''}<span>${ini[+r.ym.slice(5) - 1]}</span></button>`; }).join('');
+  const bars = f.map((r, k) => { const base = 100 - zero; let acc = 0;
+    const st = segs(r), parts = st.map(([kind, v, col], i) => { const h = Math.max(1.2, pc(v)), seg = `<i style="bottom:calc(${(base + pc(acc)).toFixed(1)}% + ${i * 2}px);height:${h.toFixed(1)}%;background:${col};border-radius:${i === st.length - 1 ? '4px 4px 0 0' : '0'}"></i>`; acc += v; return seg; }).join('');
+    const neg = r.bal < 0 ? `<i class="neg" style="top:${zero}%;height:${Math.max(1.5, pc(-r.bal)).toFixed(1)}%"></i>` : '';
+    const topAt = base + pc(acc), tot = acc;
+    return `<button class="fbar" data-k="${k}" aria-label="${esc(ymLabel(r.ym))} : total ${fmt(r.bal + r.sav)}">${parts}${neg}<b class="ftop" style="bottom:calc(${topAt.toFixed(1)}% + ${Math.max(0, st.length - 1) * 2 + 3}px)">${kfmt(tot)}</b>${r.wishes.length ? `<em style="bottom:calc(${topAt.toFixed(1)}% + ${Math.max(0, st.length - 1) * 2 + 15}px)"></em>` : ''}<span>${ini[+r.ym.slice(5) - 1]}</span></button>`; }).join('');
   const tile = (label, v, cls = '', sub = '') => `<div><small>${label}</small><b class="${cls}">${fmt(v)}</b>${sub ? `<small>${sub}</small>` : ''}</div>`;
   return `<div class="gold">PRÉVISIONS · ${N} MOIS</div>
-    <p class="dim">Ton argent à la fin de chaque mois${hasSav ? ' : trésorerie disponible et épargne des objectifs' : ''}, si tu dépenses tous tes budgets et reçois ${fmt(inc)} par mois.</p>
-    <div class="fstats">${tile('Aujourd\'hui', start + (hasSav ? S.goals.reduce((a, x) => a + goalBal(x), 0) : 0), '', hasSav ? 'avec épargne' : '')}${tile('Au plus bas', low.bal, low.bal < 0 ? 'red' : '', `tréso · ${monthShort(low.ym)}`)}${tile(`Dans ${N} mois`, end.bal + (hasSav ? end.sav : 0), end.bal + (hasSav ? end.sav : 0) < 0 ? 'red' : 'gold', hasSav ? 'avec épargne' : 'trésorerie')}</div>
-    <div class="flegend"><span><i class="cash"></i>Trésorerie disponible</span>${hasSav ? '<span><i class="sav"></i>Épargne (objectifs)</span>' : ''}${f.some(r => r.wishes.length) ? '<span><em></em>Wish list</span>' : ''}${f.some(r => r.bal < 0) ? '<span><i class="neg"></i>Sous zéro</span>' : ''}</div>
+    <p class="dim">Ton argent à la fin de chaque mois : trésorerie, épargne libre et épargne de chaque objectif. Sorties = budgets + Wish list ; 10 % de chaque salaire et 40 % de la trésorerie de fin de mois (dès 100 000 F) passent en épargne. Revenu prévu : ${fmt(inc)} par mois.</p>
+    <div class="fstats">${tile('Aujourd\'hui', start + g.savingsBal, '', 'avec épargne')}${tile('Au plus bas', low.bal, low.bal < 0 ? 'red' : '', `tréso · ${monthShort(low.ym)}`)}${tile(`Dans ${N} mois`, end.bal + end.sav, end.bal + end.sav < 0 ? 'red' : 'gold', 'avec épargne')}</div>
+    <div class="flegend"><span><i class="cash"></i>Trésorerie</span>${hasSav ? `<span><i style="background:#9fb4ff"></i>Épargne libre</span>${S.goals.map(x => `<span><i style="background:${goalColor(x)}"></i>${esc(x.name)}</span>`).join('')}` : ''}${f.some(r => r.wishes.length) ? '<span><em></em>Wish list</span>' : ''}${f.some(r => r.bal < 0) ? '<span><i class="neg"></i>Sous zéro</span>' : ''}</div>
     <div class="fbars" style="--zero:${zero.toFixed(1)}%">${bars}</div>
     <p class="ftip" id="ftip">Touche une barre pour voir le détail du mois.</p>
     ${low.bal < 0 ? `<p class="red">Tu passerais sous zéro en ${esc(ymLabel(low.ym))}. Repousse une ligne de la Wish list, ajuste un budget ou prévois une rentrée.</p>` : ''}
@@ -2097,15 +2117,14 @@ function forecastPanel(g) { // les prévisions : chaque mois, ton argent en fin 
     <form data-form="income-plan"><label class="dim">Revenu mensuel prévu${S.expectedIncome == null && inc ? ' (moyenne de tes rentrées récentes)' : ''}</label><div class="row"><input name="amount" class="amount" inputmode="numeric" value="${S.expectedIncome == null ? '' : num(S.expectedIncome)}" placeholder="${num(inc)}"><span class="gold">F</span><button class="ffbtn sm">OK</button></div></form>
     ${S.startCash != null && ymOf(S.startDate || today()) >= ymOf(today()) ? `<p class="dim">${esc(ymLabel(ymOf(S.startDate || today())))} : pas de revenu ajouté, il est déjà dans ta trésorerie d'ouverture.</p>` : ''}
 
-    <details class="fdetail"><summary>Mois par mois</summary><div class="kv fc">${f.map(r => `<span>${esc(ymLabel(r.ym))}${r.wishes.length ? ` · ${r.wishes.map(w => esc(w.name)).join(', ')}` : ''}</span><b class="${r.bal < 0 ? 'red' : ''}">${fmt(r.bal)}</b>`).join('')}</div><p class="dim">Chaque mois : + revenu prévu + encaissements de la Wish list − budgets du mois − décaissements hors budget (une ligne plus chère que son budget pèse en plus). Départ : la trésorerie nette.</p></details>`;
+    <details class="fdetail"><summary>Mois par mois</summary><div class="ftable"><span class="h">Mois</span><span class="h">Revenu</span><span class="h">Sorties</span><span class="h">Épargné</span><span class="h">Tréso fin</span>${f.map(r => `<span>${esc(monthShort(r.ym))}${r.wishes.length ? ' •' : ''}</span><span class="green">${kfmt(r.income)}</span><span class="red">${kfmt(r.out)}</span><span class="gold">${kfmt(r.cut + r.sweep)}</span><span class="${r.bal < 0 ? 'red' : ''}">${kfmt(r.bal)}</span>`).join('')}</div><p class="dim">Chaque mois : trésorerie + revenu prévu − sorties (budgets + Wish list hors budget) − 10 % du salaire ; puis, si la trésorerie de fin de mois atteint 100 000 F, 40 % passe en épargne. Le mois de ta trésorerie d'ouverture n'ajoute pas de revenu. Départ : la trésorerie nette.</p></details>`;
 }
 // Toucher ou survoler une barre : le mois, la trésorerie prévue et les envies s'affichent dessous
 function forecastPoint(e) {
   const b = e.target.closest && e.target.closest('.fbar'); if (!b || UI.place !== 'belvedere' || UI.sub !== 'forecast') return;
   const r = forecast(UI.game)[+b.dataset.k]; if (!r) return;
   document.querySelectorAll('.fbar.on').forEach(x => x.classList.remove('on')); b.classList.add('on');
-  const sv = S.goals.length ? r.sav : 0;
-  $('#ftip').innerHTML = `<b>Fin ${esc(ymLabel(r.ym))}</b> · total <span class="gold">${fmt(r.bal + sv)}</span><br><small><span class="${r.bal < 0 ? 'red' : 'green'}">trésorerie ${fmt(r.bal)}</span>${S.goals.length ? ` · <span class="gold">épargne ${fmt(sv)}</span>` : ''} · + ${fmt(r.income)} revenu · − ${fmt(r.out)} sorties${r.wishes.length ? ` · ${r.wishes.map(w => esc(w.name)).join(', ')}` : ''}</small>`;
+  $('#ftip').innerHTML = `<b>Fin ${esc(ymLabel(r.ym))}</b> · total <span class="gold">${fmt(r.bal + r.sav)}</span><br><small><span class="${r.bal < 0 ? 'red' : 'green'}">trésorerie ${fmt(r.bal)}</span> · épargne libre ${fmt(r.free)}${S.goals.map(x => ` · ${esc(x.name)} ${fmt(r.goals[x.id] || 0)}`).join('')}<br>+ ${fmt(r.income)} revenu · − ${fmt(r.out)} sorties (budgets + Wish list) · ${fmt(r.cut)} de salaire épargnés${r.sweep ? ` · ${fmt(r.sweep)} de fin de mois épargnés` : ''}${r.wishes.length ? ` · ${r.wishes.map(w => esc(w.name)).join(', ')}` : ''}</small>`;
 }
 document.addEventListener('pointerover', forecastPoint);
 document.addEventListener('pointerdown', forecastPoint);
@@ -2192,8 +2211,8 @@ function refundRow(r) {
   const rest = refundRest(r), owed = r.dir === 'owed', done = rest === 0;
   return `<div class="li ${done ? 'off' : ''}"><span class="rf-dir ${owed ? 'green' : 'red'}" title="${owed ? 'On me doit' : 'Je dois'}">${owed ? '↙' : '↗'}</span><span class="grow">${esc(r.who)}${r.note ? ` · ${esc(r.note)}` : ''}<br><small class="dim">${owed ? 'avancé' : r.how === 'cash' ? 'prêté' : 'payé pour moi'} le ${dayLabel(r.date)}${r.addCash ? ' · compté dans la trésorerie' : ''}${r.pays.length ? ` · ${done ? 'réglé' : `${fmt(r.amount - rest)} déjà rendus`}` : ''}</small></span><b class="${done ? 'dim' : owed ? 'green' : 'red'}">${fmt(done ? r.amount : rest)}</b>${done ? '' : `<button class="ffbtn sm" data-act="refundPay" data-id="${r.id}" title="${owed ? 'Marquer remboursé' : "J'ai remboursé"}">✓</button>`}<button class="x" data-act="delRefund" data-id="${r.id}" aria-label="Supprimer">×</button></div>`;
 }
-const FLOW_KINDS = {goalspend: ['◆', 'Payé par un objectif', 'dim'], spend: ['↗', 'Décaissement hors budget', 'red'], gift: ['↗', "J'ai fait un don", 'red'], save: ['⇣', 'Mis de côté (épargne)', 'red'], withdraw: ['⇡', "Retiré de l'épargne", 'green']};
-function flowRow(x) { const [ic, label0, col] = FLOW_KINDS[x.kind], gl = x.goalId && goalOf(x.goalId), label = gl ? `${label0}${x.kind === 'goalspend' ? ' ' : ' · '}${gl.name}` : label0, sign = x.kind === 'withdraw' ? '+' : x.kind === 'goalspend' ? '' : '−';
+const FLOW_KINDS = {alloc: ['◆', 'Affecté à', 'dim'], unalloc: ['◇', 'Retiré de', 'dim'], goalspend: ['◆', 'Payé par un objectif', 'dim'], spend: ['↗', 'Décaissement hors budget', 'red'], gift: ['↗', "J'ai fait un don", 'red'], save: ['⇣', 'Mis de côté (épargne)', 'red'], withdraw: ['⇡', "Retiré de l'épargne", 'green']};
+function flowRow(x) { const [ic, label0, col] = FLOW_KINDS[x.kind], gl = x.goalId && goalOf(x.goalId), label = gl ? `${label0}${['goalspend', 'alloc', 'unalloc'].includes(x.kind) ? ' ' : ' · '}${gl.name}` : (x.note && x.kind === 'save' && (x.incomeId || x.sweep) ? x.note : label0), sign = x.kind === 'withdraw' ? '+' : ['goalspend', 'alloc', 'unalloc'].includes(x.kind) ? '' : '−';
   return `<div class="li"><span class="rf-dir ${col}">${ic}</span><span class="grow">${esc(x.kind === 'gift' && x.who ? `Don à ${x.who}` : label)}${x.note ? ` · ${esc(x.note)}` : ''}<br><small class="dim">${dayLabel(x.date)}</small></span><b class="${col}">${sign}${fmt(x.amount)}</b><button class="x" data-act="delFlow" data-id="${x.id}" aria-label="Supprimer">×</button></div>`; }
 function refundPanel(g) { // les autres flux, hors budget : remboursements, dons, épargne ; seule la trésorerie bouge
   const open = S.refunds.filter(r => refundRest(r) > 0).sort((a, b) => a.date.localeCompare(b.date)), done = S.refunds.filter(r => refundRest(r) === 0).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
@@ -2306,7 +2325,7 @@ function chooseMenu(i) {
 function toast(title, msg) { const box = $('#toasts'); while (box.children.length >= 3) box.firstChild.remove(); const el = document.createElement('div'); el.className = 'ff toast'; el.innerHTML = `<b class="gold">${esc(title)}</b><br>${esc(msg)}`; $('#toasts').appendChild(el); setTimeout(() => el.remove(), 3600); }
 function commit(fx) {
   const before = UI.game || computeGame();
-  autoGoals(); goalMilestones(); save(true); if (UI.place === 'belvedere' && UI.dlg && UI.sub !== 'tip') { UI.game = computeGame(); UI.dlg.text = lineOf('belvedere', UI.game); } const g = renderUI();
+  autoSavings(); goalMilestones(); save(true); if (UI.place === 'belvedere' && UI.dlg && UI.sub !== 'tip') { UI.game = computeGame(); UI.dlg.text = lineOf('belvedere', UI.game); } const g = renderUI();
   if (g.xp > before.xp) { toast('+' + (g.xp - before.xp) + ' XP', fx || 'Bien joué !'); UI.cheerUntil = performance.now() + 1800; }
   progress(g);
 }
@@ -2391,7 +2410,7 @@ const ACT = {
   goConfig: () => { if (UI.place === 'home') closePlace(); else openPlace('home'); },
   goalEdit: a => modal(goalForm(a.dataset.id && goalOf(a.dataset.id))),
   goalDel: a => { const x = goalOf(a.dataset.id); if (!x || !confirm(`Supprimer l'objectif « ${x.name} » ? Ce qui est de côté (${fmt(goalBal(x))}) revient dans l'épargne libre.`)) return; S.flows.forEach(f => { if (f.goalId === x.id) delete f.goalId; }); S.goals = S.goals.filter(y => y !== x); commit(); },
-  goalMove: a => { const x = goalOf(a.dataset.id); if (!x) return; const save = a.dataset.k === 'save'; modal(`<div class="gold">${save ? 'VERSER DANS' : 'RETIRER DE'} ${esc(x.name.toUpperCase())}</div><p class="dim">${save ? 'La trésorerie baisse, l\'objectif monte.' : 'L\'objectif baisse, la trésorerie remonte.'} De côté : ${fmt(goalBal(x))}.${save && goalRoom() !== Infinity ? ` Tu peux verser jusqu'à ${fmt(goalRoom())}.` : ''}</p><form data-form="goalMove" data-id="${x.id}" data-k="${a.dataset.k}" autocomplete="off"><div class="row"><input name="amount" class="amount" inputmode="numeric" placeholder="0"><span class="gold">F</span></div><input name="date" type="date" class="full" value="${today()}"><div class="row"><button class="ffbtn grow">OK</button><button type="button" class="ffbtn" data-act="closeModal">Annuler</button></div></form>`); },
+  goalMove: a => { const x = goalOf(a.dataset.id); if (!x) return; const al = a.dataset.k === 'alloc', max = al ? freeBal() : goalBal(x); modal(`<div class="gold">${al ? 'AFFECTER À' : 'RETIRER DE'} ${esc(x.name.toUpperCase())}</div><p class="dim">${al ? `Depuis ton épargne libre (${fmt(max)}).` : `Vers ton épargne libre. Dans l'objectif : ${fmt(max)}.`}</p><form data-form="goalMove" data-id="${x.id}" data-k="${a.dataset.k}" autocomplete="off"><div class="row"><input name="amount" class="amount" inputmode="numeric" placeholder="0" value="${max > 0 ? num(max) : ''}"><span class="gold">F</span></div><input name="date" type="date" class="full" value="${today()}"><div class="row"><button class="ffbtn grow">OK</button><button type="button" class="ffbtn" data-act="closeModal">Annuler</button></div></form>`); },
   goWish: () => { if (UI.place === 'belvedere') closePlace(); else openPlace('belvedere', 'wishes'); },
   editWish: a => { const w = S.wishes.find(x => x.id === a.dataset.id); if (w) modal(wishForm(w)); },
   delWish: a => { const w = S.wishes.find(x => x.id === a.dataset.id); if (w && confirm(`Retirer « ${w.name} » de la Wish list ?`)) { S.wishes = S.wishes.filter(x => x !== w); commit(); } },
@@ -2458,18 +2477,16 @@ document.addEventListener('submit', e => {
   else if (k === 'welcome') { S.onboarded = true; S.heroName = v('name').trim().slice(0, 20) || CHARS[heroChar()].name; const c = v('cash'); if (c.trim()) { S.startCash = parseAmt(c); S.startDate = today(); } UI.welcomeCash = ''; closeModal(); save(true); renderUI(); progress(UI.game, true); UI.dlg = idleDlg(); renderUI(); }
   else if (k === 'unlock') { unlock(v('code')); }
   else if (k === 'goal') {
-    const name = v('name').trim().slice(0, 30), target = parseAmt(v('target')), monthly = parseAmt(v('monthly')), due = /^\d{4}-\d{2}$/.test(v('due')) ? v('due') : null, now = ymOf(today());
+    const name = v('name').trim().slice(0, 30), target = parseAmt(v('target')), due = /^\d{4}-\d{2}$/.test(v('due')) ? v('due') : null;
     if (!name || !target) { toast('Objectif', 'Indique un nom et une cible.'); return; }
     let x = f.dataset.id && goalOf(f.dataset.id);
-    if (x) { Object.assign(x, {name, target, due}); x.plan[now > x.start ? now : x.start] = monthly; }
-    else { x = {id: uid(), name, target, due, start: now, created: today(), plan: {[now]: monthly}}; S.goals.push(x); }
-    autoGoals(); closeModal(); SFX.quest(); toast('Objectif enregistré', `${name} : ${fmt(target)}, ${fmt(monthly)} par mois.`); UI.sub = 'goals'; commit();
+    if (x) Object.assign(x, {name, target, due}); else { x = {id: uid(), name, target, due, start: ymOf(today()), created: today(), plan: {}}; S.goals.push(x); }
+    closeModal(); SFX.quest(); toast('Objectif enregistré', `${name} : ${fmt(target)}${due ? ` pour fin ${ymLabel(due)}` : ''}.`); UI.sub = 'goals'; commit();
   }
   else if (k === 'goalMove') {
-    const x = goalOf(f.dataset.id), amount = parseAmt(v('amount')); if (!x || !amount) return; const save = f.dataset.k === 'save';
-    if (!save && amount > goalBal(x)) { toast('Montant', `Il n'y a que ${fmt(goalBal(x))} dans cet objectif.`); return; }
-    if (save) { const room = goalRoom(); if (amount > room) { toast('Trésorerie', room === Infinity ? '' : `Tu peux verser au plus ${fmt(room)} (en gardant de quoi finir le budget du mois).`); return; } }
-    S.flows.push({id: uid(), kind: save ? 'save' : 'withdraw', goalId: x.id, amount, date: v('date') || today(), note: ''}); closeModal(); SFX.coin(); commit();
+    const x = goalOf(f.dataset.id), amount = parseAmt(v('amount')); if (!x || !amount) return; const al = f.dataset.k === 'alloc', max = al ? freeBal() : goalBal(x);
+    if (amount > max) { toast('Montant', al ? `Ton épargne libre n'a que ${fmt(max)}.` : `Il n'y a que ${fmt(max)} dans cet objectif.`); return; }
+    S.flows.push({id: uid(), kind: al ? 'alloc' : 'unalloc', goalId: x.id, amount, date: v('date') || today(), note: ''}); closeModal(); SFX.coin(); commit();
   }
   else if (k === 'wish') {
     const name = v('name').trim().slice(0, 60), price = parseAmt(v('amount')), month = /^\d{4}-\d{2}$/.test(v('month')) ? v('month') : addMonths(ymOf(today()), 1), catId = [WISH_IN, WISH_OUT].includes(v('catId')) || catOf(v('catId')) || (v('catId').startsWith('@goal:') && goalOf(v('catId').slice(6))) ? v('catId') : S.categories[0].id;
@@ -2603,7 +2620,7 @@ function handCursor() { // la main gantée des menus, dessinée au pixel
 function boot() {
   S = load() || defaultState(); save(false);
   handCursor(); sizeScene();
-  if (autoGoals() | goalMilestones()) save(true);
+  if (autoSavings() | goalMilestones()) save(true);
   UI.game = computeGame(); UI.dlg = S.onboarded && !S.expenses.length ? idleDlg() : null;
   SCENE.cam = clampCam(0);
   renderUI(); progress(UI.game, true);
@@ -2616,7 +2633,7 @@ function boot() {
   const loop = now => {
     const dt = Math.min(.05, (now - last) / 1000); last = now;
     updateScene(dt, now); drawScene(now);
-    const m = new Date().getMinutes(); if (m !== lastMin) { lastMin = m; if (autoGoals() | goalMilestones()) save(true); renderUI(); }
+    const m = new Date().getMinutes(); if (m !== lastMin) { lastMin = m; if (autoSavings() | goalMilestones()) save(true); renderUI(); }
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);

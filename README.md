@@ -162,8 +162,8 @@ Les encaissements et décaissements hors budget ne touchent ni le budget, ni le 
 
 **Prévisions** : le **revenu mensuel prévu** se règle sous les barres (sans réglage, c'est la moyenne des rentrées des trois derniers mois). Il n'est pas ajouté au mois de la trésorerie d'ouverture : le salaire de ce mois-là y est déjà.
 - Trois chiffres : ton argent aujourd'hui (trésorerie + épargne), la trésorerie au plus bas, et ton argent dans 12 mois (6 sur téléphone).
-- **Une barre par mois**, empilée : la **trésorerie disponible** (vert) et l'**épargne des objectifs** (doré) en fin de mois, avec le total au-dessus ; en rouge sous la ligne si la trésorerie passe sous zéro ; un point rose quand une ligne de la Wish list tombe ce mois-là. Toucher une barre affiche le total, la trésorerie, l'épargne, le revenu et les sorties du mois.
-- Chaque mois : + le revenu prévu + les encaissements de la Wish list − les budgets du mois − les versements vers les objectifs − les décaissements hors budget. Une ligne plus chère que son budget pèse en plus. Le mois en cours ne compte que ce qui reste à dépenser.
+- **Une barre par mois**, empilée : la **trésorerie** (vert), l'**épargne libre** (bleu) et l'épargne de **chaque objectif** (une couleur chacun), avec le total au-dessus ; en rouge sous la ligne si la trésorerie passe sous zéro ; un point blanc quand une ligne de la Wish list tombe ce mois-là. Toucher une barre détaille le mois.
+- Chaque mois : trésorerie + revenu prévu − **sorties (budgets + Wish list hors budget)** − 10 % du salaire (vers l'épargne) ; puis, si la trésorerie de fin de mois atteint 100 000 F, 40 % passe en épargne. « Mois par mois » donne le tableau : revenu, sorties, épargné, trésorerie de fin de mois.
 - Si la courbe passe sous zéro, l'écran dit quand et de combien : de quoi repousser une ligne de la Wish list, ajuster un budget ou prévoir une rentrée.
 
 ## Noter : décaissement ou encaissement
@@ -174,13 +174,20 @@ Marché › **Noter** commence par le sens du mouvement :
 
 Récentes montre les deux, mêlés par date.
 
-## Les objectifs d'épargne (🎁 › Objectifs)
+## L'épargne et les objectifs (🎁 › Objectifs)
 
-Chaque objectif (Urgence, Logement, Mariage…) a une **cible**, une **échéance** et un **versement mensuel** :
-- chaque mois, le versement prévu est **pris tout seul sur la trésorerie disponible**, en gardant toujours de quoi finir le budget du mois : si la trésorerie ne suffit pas, il verse ce qu'il peut et **complète dès qu'un encaissement arrive** (ton salaire) ;
-- une **barre de progression**, ce qui a été versé ce mois-ci, le mois où l'objectif sera atteint, et une alerte s'il arrive après l'échéance ;
-- **Verser** (dans la limite de la trésorerie disponible) et **Retirer** à la main, **Modifier** la cible, l'échéance ou le versement (à partir du mois en cours) ;
-- une ligne de la Wish list peut être **payée par un objectif** (Type « ◆ Logement »…) : l'argent sort de l'objectif, la trésorerie ne bouge pas.
+**L'épargne se remplit toute seule :**
+- **10 % de chaque salaire** : à chaque encaissement de catégorie Salaire, 10 % part en épargne libre ;
+- **la fin de mois** : si la trésorerie de fin de mois atteint **100 000 F**, **40 %** part en épargne libre et 60 % reste en trésorerie ; en dessous, tout reste en trésorerie ;
+- ce que tu mets de côté toi-même (Marché › Autres flux › « J'ai mis de côté »).
+
+**Tu l'affectes à tes objectifs** (Urgence, Logement, Mariage…) avec **Affecter** ; **Retirer** la remet en épargne libre. L'écran montre l'épargne totale, l'épargne libre et ce que contient chaque objectif. Pour chaque objectif :
+- une **barre de progression** (montant mis / cible) ;
+- « **Il te faut épargner X F par mois pour l'atteindre fin <échéance>** » ;
+- la **date d'arrivée** à ton rythme (moyenne de ce que tu y as mis sur les trois derniers mois), en rouge si elle dépasse l'échéance ;
+- une ligne de la Wish list peut être **payée par un objectif** (Type « ◆ Logement »…) : l'argent sort de l'objectif (puis de l'épargne libre s'il manque), la trésorerie ne bouge pas.
+
+Un nouvel objectif demande une cible et une échéance.
 
 **Ce que l'épargne débloque dans le jeu :**
 - **un monument par objectif** dans la vallée, bâti un quart à la fois (25, 50, 75, 100 %) : le grenier fortifié de l'Urgence, ta maison pour le Logement, la chapelle et son jardin pour le Mariage, une statue pour les autres ;
