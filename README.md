@@ -107,16 +107,16 @@ Entre ces étapes : des maisons, des arbres, des chemins et des potagers. La vil
 
 Chaque quête a une **catégorie** (Quêtes › + Quête ou Gérer) : **Sport** ou **Mindset**, ou aucune. Chaque catégorie bâtit un ouvrage dans la ville en contrebas, **selon la régularité** :
 - un jour compte dès qu'au moins une quête de la catégorie est accomplie ; **100 jours** achèvent l'ouvrage, en 10 étapes de 10 jours ;
-- **Sport** : la **statue géante du Penseur**, un héros grec de marbre, barbu aux cheveux bouclés, le menton sur le poing, la draperie sur les cuisses, assis sur son rocher ; sculptée de bas en haut (fondations, piédestal, rocher, pieds, jambes, torse, bras, tête, muscles ciselés, plaque dorée) ;
+- **Sport** : **la statue du Penseur**, au fond de la vallée, là où la rivière se jette dans la mer. Sur la falaise de gauche se dresse un temple grec ; sur le cap d'en face, le Penseur le regarde, de profil : un héros de marbre blanc, barbu aux cheveux bouclés, le menton sur le poing, le coude sur le genou, assis sur son rocher. Il se sculpte de bas en haut (fondations, piédestal, rocher, pieds, jambes, torse, bras, tête, marbre poli, plaque dorée) ;
 - **Mindset** : **l'arbre de la connaissance**, de la graine à la grande canopée aux feuilles lumineuses ;
-- **achevé, il s'embellit** tous les 25 jours réguliers : couronne de laurier, flambeaux, jardin et statue de bronze doré ; ou lanternes, fruits dorés, banc et lucioles ;
+- **achevé, il s'embellit** tous les 25 jours réguliers : couronne de laurier dorée, flambeaux, cyprès et fleurs, puis une aura qui fait luire sa tête la nuit ; ou lanternes, fruits dorés, banc et lucioles ;
 - **délaissé 7 jours**, il se couvre de lierre et de fissures ; **chaque semaine de plus fait tomber une étape**. Reprendre les quêtes efface le lierre ;
 - Quêtes › **Ouvrages** montre la progression, l'étape suivante et l'alerte de lierre ; chaque étape rapporte 20 XP (100 par embellissement), et l'ouvrage achevé déclenche une fête.
 
 ## Les petites animations du fond
 
 Discrètes, sur ordinateur seulement (coupées sur téléphone et quand l'appareil demande moins d'animations) :
-- **le ciel** : nuages qui glissent, une volée d'oiseaux de temps en temps, le dirigeable d'Ama, des étoiles filantes la nuit ;
+- **le ciel** : les nuages dérivent avec le vent, plus vite par gros temps (sur téléphone aussi) ; une volée d'oiseaux de temps en temps, le dirigeable d'Ama, des étoiles filantes la nuit ;
 - **la vallée** : fumée des cheminées, ailes du moulin qui tournent, rivière et lac qui scintillent, barque qui glisse sur le lac ;
 - **la rue** : flammes des lanternes qui vacillent, un chat sur la balustrade qui remue la queue, des pigeons qui picorent puis s'envolent ;
 - **l'ambiance de l'heure** : pétales et feuilles au vent, brume du matin sur la vallée (6 h – 10 h), poussière dorée du soir (17 h – 21 h), lucioles la nuit.

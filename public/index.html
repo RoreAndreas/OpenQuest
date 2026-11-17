@@ -869,7 +869,7 @@ const INCOME_CATS = {salaire: 'Salaire', prime: 'Prime', vente: 'Vente', cadeau:
    son ouvrage dans la ville en contrebas (100 jours pour l'achever, en 10 étapes) ; il s'embellit ensuite. Délaissé 7 jours,
    il se couvre de lierre ; chaque semaine de plus lui fait perdre une étape. ---- */
 const QUEST_CATS = {
-  sport: {name: 'Sport', work: 'La statue du Penseur', icon: '💪', steps: ['les fondations', 'le piédestal', 'le rocher', 'les pieds', 'les jambes', 'le torse', 'le bras qui soutient la tête', 'la tête', 'les muscles ciselés', 'la statue achevée'], emb: ['la couronne de laurier dorée', 'les flambeaux', 'le jardin', "l'aura de bronze"]},
+  sport: {name: 'Sport', work: 'La statue du Penseur', icon: '💪', steps: ['les fondations', 'le piédestal', 'le rocher', 'les pieds', 'les jambes', 'le torse', 'le bras qui soutient la tête', 'la tête', 'le marbre poli', 'la statue achevée'], emb: ['la couronne de laurier dorée', 'les flambeaux', 'les cyprès et les fleurs', "l'aura"]},
   mind: {name: 'Mindset', work: "L'arbre de la connaissance", icon: '🧠', steps: ['la graine', 'la pousse', 'le jeune tronc', 'les premières branches', 'les feuilles', 'la ramure', 'la grande canopée', 'les racines profondes', 'les feuilles lumineuses', "l'arbre achevé"], emb: ['les lanternes', 'les fruits dorés', 'le banc et le sentier', 'les lucioles']},
 };
 const WORK_DAYS = 100, STEP_DAYS = 10, EMB_DAYS = 25, IVY_DAYS = 7;
@@ -1417,12 +1417,15 @@ function skyLayer(tod, weather) {
   // nuages en bandes
   const cloud = tod === 'day' ? ['#ffffff', '#e4f0fa', '#c8d8ea'] : tod === 'evening' ? ['#e48c8a', '#c86476', '#9a4664'] : ['#3a3c66', '#2e3058', '#24264a'];
   const n = weather === 'clear' ? 6 : weather === 'cloudy' ? 12 : 18;
+  // les nuages ont leur propre plan, qui dérive avec le vent (drawScene) ; il se raccorde sur ses bords
+  const [cc0, cg] = mkc(W, HZ + 8); c.clouds = cc0;
   for (let k = 0; k < n; k++) {
     const cy = 4 + Math.floor(r() * (HZ - 10)), cx = Math.floor(r() * W), len = 50 + Math.floor(r() * 90);
     const cc = weather === 'clear' ? cloud : cloud.map(col => mix(col, '#585468', weather === 'cloudy' ? .3 : .6));
-    for (let j = 0; j < 4; j++) { const y = cy + j * 2, x0 = cx - len / 2 + j * 6, w = len - j * 14; R(g, x0, y, w, 2, j === 0 ? cc[0] : cc[1]); for (let x = x0; x < x0 + w; x += 5 + Math.floor(r() * 6)) R(g, x, y + 2, 3, 1, cc[2]); }
+    for (let j = 0; j < 4; j++) { const y = cy + j * 2, x0 = cx - len / 2 + j * 6, w = len - j * 14, bumps = []; for (let x = x0; x < x0 + w; x += 5 + Math.floor(r() * 6)) bumps.push(x);
+      for (const o of [-W, 0, W]) { R(cg, x0 + o, y, w, 2, j === 0 ? cc[0] : cc[1]); for (const x of bumps) R(cg, x + o, y + 2, 3, 1, cc[2]); } }
   }
-  // l'astre, devant les nuages
+  // l'astre ; les nuages passent devant
   if (weather !== 'storm') { g.fillStyle = T.sun; g.beginPath(); g.arc(sx, sy, tod === 'night' ? 5 : 8, 0, 7); g.fill(); if (tod !== 'night') { g.fillStyle = '#fff4e0'; g.beginPath(); g.arc(sx, sy, 5, 0, 7); g.fill(); } if (tod === 'night') { g.fillStyle = bands[0]; g.beginPath(); g.arc(sx + 2, sy - 1, 4, 0, 7); g.fill(); } }
   // l'horizon et la colline au loin
   for (let x = 0; x < W; x++) { const y = HZ - 2 + Math.round(Math.sin(x * .03) * 2 + Math.sin(x * .09)); R(g, x, y, 1, 8, mix('#7a5272', bands[4], .3)); }
@@ -1576,6 +1579,7 @@ function valleyLayer(n, chantier, tod) {
     const q = (y - hz - 4) / (bottom - hz - 10), p = Math.sqrt(Math.max(0, q)), w = riverW(p), x = riverX(p);
     R(g, x - w / 2, y, w, 1, mix(pal.water, pal.waterLo, p)); if (r() < .35) R(g, x - w / 3 + r() * w * .6, y, Math.max(1, Math.round(w / 6)), 1, mix(pal.water, '#ffffff', .4));
   }
+  const [c2, g2] = mkc(W, SH); c.crisp = c2; coast(g, g2, pal, tod, VW);   // le temple et le Penseur, nets, au-dessus de la brume
   // ce qui a été bâti, du plus loin au plus près, puis le chantier du jour
   VFX.smoke = []; VFX.mill = null; VFX.lake = null;
   const plan = buildPlan(), built = plan.slice(0, n).map((it, i) => ({...it, i})).sort((a, b) => a.p - b.p);
@@ -1585,8 +1589,8 @@ function valleyLayer(n, chantier, tod) {
   if (chantier && plan[n]) scaffold(g, plan[n]);
   goalMonuments(g, pal, VW);
   questWorks(g, pal, VW);
-  if (tod === 'night') { g.save(); g.globalCompositeOperation = 'source-atop'; g.fillStyle = 'rgba(10,10,40,.5)'; g.fillRect(0, 0, W, SH); g.restore(); }
-  if (tod !== 'day') for (const [x, y, w, h] of VW) R(g, x, y, w, h, '#f0b070');
+  for (const k of [g, g2]) { if (tod === 'night') { k.save(); k.globalCompositeOperation = 'source-atop'; k.fillStyle = 'rgba(10,10,40,.5)'; k.fillRect(0, 0, W, SH); k.restore(); }
+    if (tod !== 'day') for (const [x, y, w, h] of VW) R(k, x, y, w, h, '#f0b070'); }
   return c;
 }
 // Chaque objectif bâtit son monument dans la vallée, un quart à la fois (25, 50, 75, 100 %)
@@ -1597,86 +1601,101 @@ function goalMonuments(g, pal, VW) {
   let k = 0;
   for (const x of S.goals) { const st = Math.max(goalStage(x), x.best || 0); if (!st) continue; const kind = goalKind(x), [gx, gp] = GOAL_SPOTS[kind] || [VALLEY.cx - 60 + (k++) * 70, .97]; drawMonument(g, kind, gx, gp, st, pal, VW); }
 }
-// Les ouvrages des quêtes : la statue du Penseur (Sport) et l'arbre de la connaissance (Mindset), au premier plan de la vallée
-const WORK_SPOTS = {sport: [VALLEY.cx + 42, .975], mind: [VALLEY.cx - 112, .985]};
-function questWorks(g, pal, VW) { for (const k of Object.keys(QUEST_CATS)) { const w = workState(k); if (!w.pts) continue; const [x, p] = WORK_SPOTS[k]; (k === 'sport' ? drawThinker : drawTree)(g, x, p, w, VW); } }
+// Les ouvrages des quêtes : l'arbre de la connaissance (Mindset) au premier plan de la vallée ; la statue du Penseur (Sport) est sur la côte
+const WORK_SPOTS = {mind: [VALLEY.cx - 112, .985]};
+function questWorks(g, pal, VW) { for (const k of Object.keys(QUEST_CATS)) { const w = workState(k); if (!w.pts || !WORK_SPOTS[k]) continue; const [x, p] = WORK_SPOTS[k]; (k === 'sport' ? drawThinker : drawTree)(g, x, p, w, VW); } }
 function ivyOn(g, x0, y0, w, h, seed) { const r = rng(seed); for (let i = 0; i < w * h / 6; i++) { const px = x0 + r() * w, py = y0 + h - Math.pow(r(), .6) * h; P1(g, px, py, r() < .7 ? '#3e7a34' : '#5e9a44'); } for (let i = 0; i < 3; i++) { let cx = x0 + r() * w, cy = y0 + r() * h * .6; for (let k = 0; k < 5; k++) { P1(g, cx, cy, '#3a2e2e'); cx += r() < .5 ? 1 : 0; cy += 1; } } }
-// Le penseur grec, en marbre, de trois quarts face : barbe et cheveux bouclés, le menton sur le poing, une jambe repliée sur
-// le rocher, la draperie sur les cuisses. Masque : L lumière, M marbre, D ombre, K ombre profonde, r/R rocher.
+// Le Penseur, de profil, tourné vers le temple : barbe et cheveux bouclés, le menton sur le poing, le coude sur le genou,
+// assis sur son rocher. Dessiné pixel par pixel, à la taille réelle. L lumière, M marbre, D ombre, K contour, r/R rocher.
 const THINKER = [
-  "............LLMLLMLD..................",
-  "........LLMLLLLLLLLK..................",
-  "........LLLLMMLMMLDDD.................",
-  "........LLLMDMDKMDMLDK................",
-  "........MLMKKKKKKKMMDK................",
-  "........LLKKKLLLDDMMMMK...............",
-  ".......LLMKDLLLMDDDDLMK...............",
-  ".......LMDDLLLLLMDDLMDK...............",
-  ".......KKKKLLLLMMMKLMMK...............",
-  "..........KLMMDDMKKKDDK...............",
-  "...........MKKKKKKDDKK................",
-  "...........DLLMLLMLD..................",
-  "..........MMLLLLLMLKK.................",
-  ".........DMLMMLMDMDKK.................",
-  "..........DDMMDKMMKK..................",
-  "...........KKKKKDDKLK.................",
-  ".....LMMMMDDLLLDKKDMDDLMMMK...........",
-  ".....MDDDDKLMLMKLDDDKMDDDDDK..........",
-  "....LKLLDDMDDDDKDLLLLDDKLDDK..........",
-  "....KLMLDDMDMDKMLLLLMDDLMMDK..........",
-  ".....DMLMKMKMMDDLLLMMMKLLMDK..........",
-  ".....KLMMKDLMDLKDDMDDKKDDMMK..........",
-  "......KDMDDLLKDMDDKKKKLDKDMDK.........",
-  ".......LMDKLMKDLDMDMMLMK.LMMK.........",
-  ".......KDDLMDKLMMLDDMLMK.KDMK.........",
-  "........MDLLKLLLLMDDLLDK..MKDK........",
-  "........KDLMKLLLMMMKLMKK..DLLK........",
-  ".........DLMKLLMDMDKMDK.LLLMMDK.......",
-  ".........DDDKLMDDKKKDKLLMLMDKKLK......",
-  "..........KKMDKDDKLLDMMMDKKKMLMMK.....",
-  "...........MDMDDKLMLDDDKKLLMLLLDK.....",
-  "........LLLKDDDDDDMMDKLMLLLMLMDKK.....",
-  ".....LMLLLDDLLMLLDDKKLMLLLDMMDKK......",
-  "...LLMLLLMLLLMLLMKLLLMLLLDMDKKK.......",
-  "..LLLMLLLLLLLLLMMMLLLMLLMKDKKLDrrR....",
-  "..LLMLLLMMMMMLMMLLLLLLLMKDKKLMDrrrR...",
-  "..LDLMMDDDDMLMMLLLLLLLMKDDKLLLKrrrR...",
-  "..KKMDDKDDMLMMLLLLLLMMDKDKKLLMKrrrrR..",
-  "...KKKKKKDMMMLLLLLMMDDKDDKRLLMKrrrrR..",
-  "....LLLK.MMMLLMMLMDDDKDDKKRLLMKrrrrrR.",
-  "....LLMK.KDLLMMLMMKDDKDDKKRLLMKRrrrrR.",
-  "....LLMK..LLMMLMDDKDDKDDKrRLLMKrrrrrR.",
-  "....LLMK..LMDLMKDDKDDKDDKrRLMMKrRrrrR.",
-  "....LMMK..KDMMDKDDKDDKDKKrRDDMKrrrrrR.",
-  "....KDMK...LDDDKDDKDDKDKrrrRLMKrrRrrR.",
-  ".....LMK...KKKKKKKKKKKKKrrrRLMKrrrrrR.",
-  ".....DKK.......rrrrrrrrRrrrRDKKrrrRrR.",
-  "...LMMMMK......rrrRrrrrrrrRLMMMMDrrrR.",
-  "...KKKKKK......rrrrrrrrrRrRKKKKKKrrRR.",
-  "......................................"];
-const THINKER_ROWS = {4: [42, 49], 5: [34, 41], 6: [26, 33], 7: [17, 25], 8: [0, 16]}; // l'étape qui sculpte chaque tranche, de bas en haut
-function drawThinker(g, x, p, w, VW) { // un héros grec musclé dans la pose du penseur ; il se sculpte de bas en haut
-  const s = vs(p) * 1.15, y = vy(p), st = w.stage, emb = w.emb, W = THINKER[0].length, H = THINKER.length, ped = 5, U = v => Math.round(v * s), px = Math.max(1, Math.ceil(s));
-  const X = c => x + Math.round((c - W / 2) * s), Y = r => y - Math.round((H + ped - r) * s), cell = (c, r, col) => R(g, X(c), Y(r), px, px, col);
-  const fin = st >= 9, gold = emb >= 4;
-  const pal = gold ? {L: '#fff1b0', M: '#e8c070', D: '#b8862e', K: '#7a5418'} : fin ? {L: '#ffffff', M: '#e6e1d8', D: '#a8a196', K: '#6a645c'} : {L: '#ddd6ca', M: '#d4ccc0', D: '#bdb4a6', K: '#a49b8c'};
-  g.fillStyle = 'rgba(30,20,30,.3)'; g.beginPath(); g.ellipse(x, y, (W / 2 + 3) * s, 3 * s, 0, 0, 7); g.fill();
-  if (st >= 1) R(g, X(-1), y - U(1), U(W + 2), U(1), '#a89888');                                              // les fondations
-  if (st >= 2) { R(g, X(1), Y(H), U(W - 2), U(ped), '#d8ccc0'); R(g, X(0), Y(H), U(W), U(1), '#ece2d8'); R(g, X(1), Y(H) + U(ped - 1), U(W - 2), U(1), '#b8ac9c'); } // le piédestal
-  if (st >= 10) R(g, X(W / 2 - 5), Y(H) + U(2), U(10), U(2), '#e8c070');                                             // la plaque dorée
+  ".......KDDDK..............",
+  ".....KDMDMDDK.............",
+  "....KDMDMDMDDK............",
+  "....LDMDMDMDDK............",
+  "....LLLLLDMDDK............",
+  "...LLKLLLLDDDK............",
+  "....LLLLLMDDKLLMK.........",
+  "....DMDMDMDDKLMMMDK.......",
+  "....LDMDMDDKLMMMMMDK......",
+  "....LLLLDDKLMMMMMMDDK.....",
+  "....LMMDKLLMMMMMMMDDK.....",
+  "....LMDKLMMDLMMMMMDDK.....",
+  "....LMDKLMMDLMMMMMDDK.....",
+  "....LMDKLMDLMMMMMMDDK.....",
+  "....LMDKLMDLMMMMMMDDK.....",
+  "....LMDLMDLMMMMMMMDDK.....",
+  "....LMDLMDDLMMMMMDDK......",
+  "..LLLMMMDDKLMMMMMMDDDK....",
+  ".LLLLLLLLLLLLLLLMMMDDDK...",
+  ".LMMMMMMMMMMMMMMMMMMDDDK..",
+  ".LMMMMMMMMMMMMMMMMMMDDDK..",
+  ".DMMDDDDDDDDDDDDDDDDDDDKr.",
+  "..DMMD...KDK...rrrrrrrrrR.",
+  "..LMMD...LMK..rrrRrrrrrrR.",
+  "..LMMMD..LMK..rrrrrrrRrrR.",
+  "..LMMMD..DMK..rrrrrrrrrrR.",
+  "...LMD...DMK..rrRrrrrrrRR.",
+  "...LMD...DMDK.rrrrrrrrrrR.",
+  "...LMD...DMDK.rrrrrRrrrrR.",
+  "..LLMDK.LDMDK.rrrrrrrrrrR.",
+  ".LLMMDDKLDDMDKrRrrrrrrrRR.",
+  ".KKKKKKKKKKKKKRRRRRRRRRRR."];
+const THINKER_ROWS = {4: [25, 31], 5: [18, 24], 6: [13, 17], 7: [9, 12], 8: [0, 8]}; // l'étape qui sculpte chaque tranche, de bas en haut
+function drawThinker(g, x, y, w, VW) { // x : le bord gauche du piédestal, y : le sol ; la statue se sculpte de bas en haut
+  const st = w.stage, emb = w.emb, W = THINKER[0].length, H = THINKER.length, ped = 3, top = y - ped - H;
+  const pal = st >= 9 ? {L: '#ffffff', M: '#e8e4dc', D: '#b4ada2', K: '#78716a'} : {L: '#d8d0c2', M: '#cbc2b4', D: '#ada392', K: '#8a8070'}; // brut, puis poli
+  if (st >= 1) R(g, x - 2, y - 1, W + 4, 1, '#a89888');                                                       // les fondations
+  if (st >= 2) { R(g, x - 1, y - ped, W + 2, ped, '#d8ccc0'); R(g, x - 1, y - ped, W + 2, 1, '#eee4d8'); R(g, x - 1, y - 1, W + 2, 1, '#a89c8c'); } // le piédestal
+  if (st >= 10) R(g, x + 5, y - 2, 8, 1, '#e8c070');                                                           // la plaque dorée
   for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
     const ch = THINKER[r][c]; if (ch === '.') continue;
-    if (ch === 'r' || ch === 'R') { if (st >= 3) cell(c, r, ch === 'R' ? '#7e746c' : '#9a8e84'); continue; }  // le rocher
+    if (ch === 'r' || ch === 'R') { if (st >= 3) P1(g, x + c, top + r, ch === 'R' ? '#7e746c' : '#9a8e84'); continue; } // le rocher
     const band = Object.entries(THINKER_ROWS).find(([, [a, b]]) => r >= a && r <= b); if (!band || st < +band[0]) continue;
-    cell(c, r, pal[ch]);
+    P1(g, x + c, top + r, pal[ch]);
   }
-  if (st < 10) { const top = st >= 8 ? 0 : st >= 4 ? THINKER_ROWS[st][0] - 3 : H - 14, xl = X(-1), xr = X(W), yt = Y(Math.max(0, top)); // l'échafaudage
-    R(g, xl, yt, 1, y - yt, '#a87850'); R(g, xr, yt, 1, y - yt, '#a87850'); for (let yy = yt; yy < y; yy += U(5)) R(g, xl, yy, xr - xl, 1, '#c8a060'); }
-  if (emb >= 1) for (const [c, r] of [[8, 3], [9, 2], [11, 1], [13, 0], [17, 0], [19, 1], [20, 2], [21, 3]]) cell(c, r, '#ffd166');                              // la couronne de laurier
-  if (emb >= 2) for (const c of [-3, W + 2]) { R(g, X(c), Y(H - 12), Math.max(1, U(1)), U(12), '#5a4a3a'); R(g, X(c) - 1, Y(H - 13), U(2), U(2), '#ffb040'); VW.push([X(c) - 1, Y(H - 13), U(2), U(2)]); } // les flambeaux
-  if (emb >= 3) for (let c = -4; c < W + 4; c += 2) { R(g, X(c), y - 1, U(1), 1, '#56a040'); P1(g, X(c), y - 2, ['#ff6fa8', '#ffd166', '#f4f4f4'][(c + 4) % 3]); } // le jardin
-  if (emb >= 4) VW.push([X(8), Y(0), U(14), U(2)]);                                                          // l'aura : la tête luit la nuit
-  if (w.ivy) ivyOn(g, X(1), Y(H - 10), U(W - 2), U(10 + ped), 7);
+  if (st < 10) { const yt = top + (st >= 8 ? 0 : st >= 4 ? THINKER_ROWS[st][0] - 2 : H - 10), xl = x - 2, xr = x + W + 1; // l'échafaudage
+    R(g, xl, yt, 1, y - yt, '#a87850'); R(g, xr, yt, 1, y - yt, '#a87850'); for (let yy = yt; yy < y; yy += 4) R(g, xl, yy, xr - xl + 1, 1, '#c8a060'); }
+  if (emb >= 1) for (const [c, r] of [[6, 2], [7, 1], [9, 0], [11, 1], [12, 2], [13, 3]]) P1(g, x + c, top + r, '#ffd166'); // la couronne de laurier
+  if (emb >= 2) for (const c of [-3, W + 2]) { R(g, x + c, y - 7, 1, 7, '#5a4a3a'); R(g, x + c - 1, y - 9, 3, 2, '#ffb040'); P1(g, x + c, y - 10, '#ffe08a'); VW.push([x + c - 1, y - 10, 3, 3]); } // les flambeaux
+  if (emb >= 3) { for (const c of [-6, W + 5]) { R(g, x + c, y - 9, 2, 9, '#2e5a34'); R(g, x + c, y - 9, 1, 8, '#3e7a44'); P1(g, x + c, y - 10, '#2e5a34'); } // les cyprès
+    for (let c = -4; c < W + 4; c += 2) P1(g, x + c, y, ['#ff6fa8', '#ffd166', '#f4f4f4'][(c + 4) % 3]); }   // et les fleurs
+  if (emb >= 4) VW.push([x + 4, top - 1, 9, 2], [x + 5, top + 1, 1, 6]);                                      // l'aura : la tête luit la nuit
+  if (w.ivy) ivyOn(g, x, top + 18, W, H - 18 + ped, 7);
+}
+// La côte au fond de la vallée : la rivière se jette dans la mer. Sur la falaise, le temple ; en face, sur son cap, le Penseur.
+const COAST = {L: VALLEY.cx - 150, R: VALLEY.cx + 196, sea: 46, shore: 55, temple: VALLEY.cx - 100, cape: VALLEY.cx + 100};
+function coast(g, gc, pal, tod, VW) { // g : la vallée (floue au loin) ; gc : le plan net du temple et de la statue
+  const {L, R: Rr, sea, shore} = COAST, dusk = tod !== 'day', tint = c => dusk ? mix(c, pal.far, .35) : c;
+  // la mer, en baie : plus claire à l'horizon, frangée d'écume et de sable sur le rivage
+  for (let y = sea; y <= shore; y++) { const k = Math.round((y - sea) * (y - sea) * .9), x0 = L + k, x1 = Rr - k; if (x1 <= x0) break;
+    R(g, x0, y, x1 - x0, 1, y === sea ? mix(pal.water, '#ffffff', .25) : mix(pal.waterLo, pal.water, (y - sea) / (shore - sea)));
+    P1(g, x0, y, tint('#e0cfa0')); P1(g, x1 - 1, y, tint('#e0cfa0')); if (y > sea + 1) { P1(g, x0 + 1, y, '#e8f4ff'); P1(g, x1 - 2, y, '#e8f4ff'); } }
+  { const k = Math.round((shore - sea) ** 2 * .9); R(g, L + k, shore + 1, Rr - L - 2 * k, 1, tint('#e0cfa0')); }
+  for (let i = 0; i < 26; i++) { const y = sea + 2 + (i * 7) % (shore - sea - 2), k = Math.round((y - sea) ** 2 * .9), x = L + k + 4 + (i * 53) % Math.max(1, Rr - L - 2 * k - 10); P1(g, x, y, mix(pal.water, '#ffffff', .45)); P1(g, x + 1, y, mix(pal.water, '#ffffff', .25)); } // les vaguelettes
+  // la falaise du temple, à gauche de la baie
+  const tx = COAST.temple, cl = tint('#dccbac'), cm = tint('#b8a286'), cd = tint('#8e7a64');
+  for (let x = tx - 14; x < tx + 58; x++) { const ttop = x < tx + 44 ? sea - 5 + Math.round(Math.sin(x * .4) * .6) : sea - 5 + Math.round((x - tx - 44) * .9), bot = shore + 2;
+    if (ttop >= bot) continue; R(g, x, ttop, 1, bot - ttop, x > tx + 40 ? cd : x > tx + 30 ? cm : cl); if (x % 5 === 0) R(g, x, ttop + 2, 1, 3, cd); R(g, x, ttop, 1, 1, x < tx + 44 ? tint(pal.field) : cm); }
+  for (const [ox, h] of [[-10, 5], [-4, 4], [50, 4]]) { R(g, tx + ox, sea - 5 - h, 1, h, '#5a4a3a'); R(g, tx + ox - 2, sea - 6 - h, 5, 3, tint('#6a8a5a')); P1(g, tx + ox - 1, sea - 7 - h, tint('#8aa870')); } // les oliviers
+  drawTemple(gc, tx, sea - 5, tint);
+  // le cap du Penseur, à droite, tourné vers le temple
+  const cx = COAST.cape;
+  const crest = x => { const d = x - cx; return d < -16 || d > 52 ? null : sea - 3 - Math.round(d < 0 ? (16 + d) * .3 : d < 30 ? 5 + Math.sin(d * .5) * .7 : (52 - d) * .25) ; };
+  for (let x = cx - 16; x <= cx + 52; x++) { const ttop = crest(x); if (ttop == null) continue; const d = x - cx;
+    R(g, x, ttop, 1, shore + 2 - ttop, d < 0 ? cl : d < 26 ? cm : cd); R(g, x, ttop, 1, 1, tint(d < 0 || d > 40 ? '#c8b48a' : pal.field));
+    if ((x * 7) % 11 < 2) R(g, x, ttop + 2 + (x % 3), 1, 2 + (x % 2), cd); if ((x * 5) % 13 < 2) P1(g, x, ttop + 3, cl); }
+  for (const [ox, oy] of [[-18, 0], [55, 1], [58, -1]]) { R(g, cx + ox, shore - 1 + oy, 3, 2, cm); P1(g, cx + ox, shore - 1 + oy, cl); } // des rochers dans l'eau
+  const w = workState('sport'); if (w.pts) drawThinker(gc, cx + 3, sea - 6, w, VW);
+}
+function drawTemple(g, x, y, tint) { // un temple dorique : trois marches, neuf colonnes, l'entablement et le fronton
+  const L = tint('#f6eedc'), M = tint('#e2d4b6'), D = tint('#baa888'), K = tint('#8a7a64'), I = tint('#6e604e'), W = 42;
+  R(g, x, y - 1, W, 1, D); R(g, x + 1, y - 2, W - 2, 1, M); R(g, x + 2, y - 3, W - 4, 1, L);                    // les marches
+  R(g, x + 3, y - 14, W - 6, 11, I);                                                                          // l'ombre de la cella
+  for (let i = 0; i < 9; i++) { const cx = x + 3 + i * 4.4 | 0; R(g, cx, y - 14, 1, 11, L); R(g, cx + 1, y - 14, 1, 11, M); P1(g, cx + 1, y - 4, D); } // les colonnes
+  R(g, x + 2, y - 15, W - 4, 1, M); R(g, x + 2, y - 16, W - 4, 1, L);                                         // l'architrave
+  R(g, x + 2, y - 17, W - 4, 1, D); for (let k = x + 3; k < x + W - 3; k += 3) P1(g, k, y - 17, K);           // la frise et ses triglyphes
+  R(g, x + 1, y - 18, W - 2, 1, L);                                                                           // la corniche
+  for (let r = 0; r < 6; r++) { const inset = Math.round(r * 3.4), w2 = W - 2 - inset * 2; if (w2 <= 0) break; R(g, x + 1 + inset, y - 19 - r, w2, 1, r === 5 ? L : D); P1(g, x + 1 + inset, y - 19 - r, L); P1(g, x + inset + w2, y - 19 - r, L); } // le fronton
 }
 function drawTree(g, x, p, w, VW) { // l'arbre de la connaissance : il grandit branche par branche
   const s = vs(p) * 1.25, y = vy(p), st = w.stage, emb = w.emb, U = v => Math.round(v * s), r = rng(5);
@@ -1971,6 +1990,8 @@ function drawScene(now) {
   g.imageSmoothingEnabled = false;
   const blit = (img, f) => g.drawImage(img, -Math.round(cam * f * z), 0, img.width * z, img.height * z);
   blit(L.sky, PAR.sky);
+  { const C = L.sky.clouds, cw = C.width, drift = AMB.mqCalm.matches ? 0 : t * (L.weather === 'storm' ? 4 : L.weather === 'clear' ? 1.2 : 2.2); // les nuages dérivent, plus vite par gros temps
+    const ox = ((drift - cam * PAR.sky) % cw + cw) % cw; for (const k of [-1, 0, 1]) g.drawImage(C, Math.round((ox + k * cw) * z), 0, cw * z, C.height * z); }
   // rayons et halo de l'astre
   const T = TOD[L.tod];
   if (L.weather === 'clear' && L.tod !== 'night') {
@@ -1987,6 +2008,7 @@ function drawScene(now) {
   g.save(); g.beginPath(); g.rect(0, (HZ + 20) * z, cv.width, cv.height); g.clip(); g.filter = `blur(${Math.max(.3, z * .14)}px)`; blit(L.valley, PAR.valley); g.restore();
   const [hr, hg, hb] = T.haze;
   let fog = g.createLinearGradient(0, HZ * z, 0, (HZ + 34) * z); fog.addColorStop(0, `rgba(${hr},${hg},${hb},.45)`); fog.addColorStop(1, `rgba(${hr},${hg},${hb},0)`); g.fillStyle = fog; g.fillRect(0, 0, cv.width, cv.height);
+  g.save(); g.globalAlpha = .88; blit(L.valley.crisp, PAR.valley); g.restore();   // le temple et le Penseur, au-dessus de la brume du fond
   const mist = g.createLinearGradient(0, (STREET - 60) * z, 0, STREET * z); mist.addColorStop(0, `rgba(${hr},${hg},${hb},0)`); mist.addColorStop(1, `rgba(${hr},${hg},${hb},.3)`); g.fillStyle = mist; g.fillRect(0, 0, cv.width, cv.height);
   // la lueur de la ville en contrebas
   { g.save(); g.globalCompositeOperation = 'lighter'; const vx = (VALLEY.cx - cam * PAR.valley) * z, vy = (STREET - 40) * z, gl = g.createRadialGradient(vx, vy, 0, vx, vy, 160 * z); gl.addColorStop(0, `rgba(255,170,100,${L.tod === 'day' ? .04 : .1})`); gl.addColorStop(1, 'rgba(255,170,100,0)'); g.fillStyle = gl; g.fillRect(0, 0, cv.width, cv.height); g.restore(); }
